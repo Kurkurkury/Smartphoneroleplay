@@ -10,6 +10,7 @@ import android.widget.ScrollView
 import android.widget.TextView
 import com.kurkurkury.smartphoneroleplay.data.CharacterRepository
 import com.kurkurkury.smartphoneroleplay.data.ChatStorage
+import com.kurkurkury.smartphoneroleplay.data.CustomCharacterStorage
 import com.kurkurkury.smartphoneroleplay.data.DemoReplyEngine
 import com.kurkurkury.smartphoneroleplay.model.ChatMessage
 import com.kurkurkury.smartphoneroleplay.model.RoleplayCharacter
@@ -20,8 +21,9 @@ class MainActivity : Activity() {
     private lateinit var scrollView: ScrollView
     private lateinit var subtitle: TextView
     private lateinit var storage: ChatStorage
+    private lateinit var characterStorage: CustomCharacterStorage
 
-    private val characters = CharacterRepository.defaultCharacters
+    private val characters = mutableListOf<RoleplayCharacter>()
     private var currentCharacterIndex = 0
     private val chatMessages = mutableListOf<ChatMessage>()
     private val currentCharacter: RoleplayCharacter
@@ -30,6 +32,9 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         storage = ChatStorage(this)
+        characterStorage = CustomCharacterStorage(this)
+        characters.addAll(CharacterRepository.defaultCharacters)
+        characters.addAll(characterStorage.load())
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -59,8 +64,14 @@ class MainActivity : Activity() {
         }
         buttonRow.addView(switchButton, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
 
+        val createButton = Button(this).apply {
+            text = "Neu"
+            setOnClickListener { createCharacterFromInput() }
+        }
+        buttonRow.addView(createButton, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+
         val clearButton = Button(this).apply {
-            text = "Chat leeren"
+            text = "Leeren"
             setOnClickListener { clearChat() }
         }
         buttonRow.addView(clearButton, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
@@ -82,7 +93,7 @@ class MainActivity : Activity() {
         }
 
         input = EditText(this).apply {
-            hint = "Schreibe deine Roleplay-Nachricht..."
+            hint = "Nachricht oder neuer Charakter: Name; Beschreibung; Begruessung"
             singleLine = false
             minLines = 1
             maxLines = 4
@@ -103,6 +114,31 @@ class MainActivity : Activity() {
     private fun switchCharacter() {
         saveCurrentChat()
         currentCharacterIndex = (currentCharacterIndex + 1) % characters.size
+        loadCurrentChat()
+    }
+
+    private fun createCharacterFromInput() {
+        val raw = input.text.toString().trim()
+        if (raw.isEmpty()) {
+            addSystemMessage("Format: Name; Beschreibung; Begruessung")
+            return
+        }
+        val parts = raw.split(";").map { it.trim() }
+        val name = parts.getOrNull(0).orEmpty().ifBlank { "Neuer Charakter" }
+        val description = parts.getOrNull(1).orEmpty().ifBlank { "Eigener Roleplay-Charakter" }
+        val greeting = parts.getOrNull(2).orEmpty().ifBlank { "Hi, ich bin $name. Starte eine Szene." }
+        val customCharacter = RoleplayCharacter(
+            id = "custom_${System.currentTimeMillis()}",
+            name = name,
+            description = description,
+            greeting = greeting,
+            personality = "benutzerdefiniert"
+        )
+        characters.add(customCharacter)
+        characterStorage.save(characters.drop(CharacterRepository.defaultCharacters.size))
+        input.setText("")
+        saveCurrentChat()
+        currentCharacterIndex = characters.lastIndex
         loadCurrentChat()
     }
 
@@ -140,6 +176,11 @@ class MainActivity : Activity() {
         chatMessages.add(ChatMessage(currentCharacter.name, DemoReplyEngine.reply(currentCharacter, text)))
         renderChat()
         saveCurrentChat()
+    }
+
+    private fun addSystemMessage(text: String) {
+        chatMessages.add(ChatMessage("System", text))
+        renderChat()
     }
 
     private fun renderChat() {
