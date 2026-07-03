@@ -30,29 +30,53 @@ Erstellt wurden:
 - eigene Charaktere direkt in der App anlegen
 - Speicherung eigener Charaktere
 
+## Meilenstein 3
+
+Status: ERLEDIGT
+
+Erstellt wurden:
+
+- modernes dunkles Chat-UI
+- Chatblasen links/rechts
+- bessere Eingabeleiste
+- lesbare Buttons
+- Version 0.2.0
+- GitHub Actions Build-Pipeline mit erfolgreichem APK-Build
+
+## Meilenstein 4
+
+Status: ANGELEGT
+
+Erstellt wurden:
+
+- AiReplyClient als austauschbare KI-Schnittstelle
+- DemoAiReplyClient als Offline-Adapter
+- RoleplayPromptBuilder fuer spaetere echte KI-Prompts
+- ChatEngine als zentrale Chat-Antwort-Schicht
+- CloudAiReplyClient als Platzhalter fuer spaetere Cloud-KI
+- MainActivity nutzt jetzt ChatEngine statt direkte DemoReplyEngine-Aufrufe
+
 ## Aktueller Funktionsstand
 
-Die App ist ein nativer Android-Prototyp. Sie zeigt einen Chat, erlaubt Nachrichten einzugeben, antwortet lokal mit Demo-Logik, kann zwischen mehreren Charakteren wechseln, speichert Chatverlaeufe pro Charakter und erlaubt einfache eigene Charaktere.
+Die App ist eine installierbare Android-Roleplay-App im Prototyp-Stadium. Sie zeigt einen modernen dunklen Chat, erlaubt Nachrichten einzugeben, antwortet offline mit Demo-Logik, kann zwischen mehreren Charakteren wechseln, speichert Chatverlaeufe pro Charakter und erlaubt einfache eigene Charaktere.
 
 ## Nutzung im Prototyp
 
-- Button Charakter: wechselt zwischen vorhandenen Charakteren
+- Button Figur: wechselt zwischen vorhandenen Charakteren
 - Button Leeren: loescht den aktuellen Chatverlauf
 - Button Neu: erstellt einen Charakter aus dem Eingabefeld
 - Format fuer Neu: Name; Beschreibung; Begruessung
 
-## Noch nicht final getestet
+## Noch offen
 
-- echter APK-Build
-- Installation auf Android-Geraet
-- Gradle Wrapper im Repository
-- echte KI-Anbindung
+- echte KI-Anbindung aktivieren
+- Netzwerk-/API-Konfiguration
+- sichere API-Key-Verwaltung
 - Bildgenerierung
-- modernes Material-Design
+- Memory-System
+- vollwertige Charakterverwaltung mit eigenem Screen
 
 ## Naechster Meilenstein
 
-- GitHub Actions Build vorbereiten
-- Build-Validierung ermoeglichen
-- UI weiter verbessern
-- spaeter echte KI-Schnittstelle anbinden
+- Build nach KI-Architektur-Umbau pruefen
+- danach echte KI-Option vorbereiten: lokal oder Cloud
