@@ -1,8 +1,12 @@
 package com.kurkurkury.smartphoneroleplay
 
 import android.app.Activity
+import android.graphics.Color
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.view.Gravity
+import android.view.View
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -29,57 +33,69 @@ class MainActivity : Activity() {
     private val currentCharacter: RoleplayCharacter
         get() = characters[currentCharacterIndex]
 
+    private val backgroundColor = Color.rgb(10, 15, 24)
+    private val panelColor = Color.rgb(18, 25, 38)
+    private val primaryColor = Color.rgb(126, 87, 194)
+    private val userBubbleColor = Color.rgb(94, 53, 177)
+    private val aiBubbleColor = Color.rgb(31, 41, 55)
+    private val textColor = Color.rgb(241, 245, 249)
+    private val mutedTextColor = Color.rgb(148, 163, 184)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         storage = ChatStorage(this)
         characterStorage = CustomCharacterStorage(this)
         characters.addAll(CharacterRepository.defaultCharacters)
         characters.addAll(characterStorage.load())
+        window.statusBarColor = backgroundColor
+        window.navigationBarColor = backgroundColor
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(32, 40, 32, 24)
+            setPadding(24, 32, 24, 20)
+            setBackgroundColor(backgroundColor)
+        }
+
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(24, 20, 24, 20)
+            background = rounded(panelColor, 28f)
         }
 
         val title = TextView(this).apply {
             text = "Smartphone Roleplay"
-            textSize = 24f
+            textSize = 26f
+            setTextColor(textColor)
+            typeface = Typeface.DEFAULT_BOLD
             gravity = Gravity.CENTER
         }
-        root.addView(title)
+        header.addView(title)
 
         subtitle = TextView(this).apply {
-            textSize = 16f
+            textSize = 14f
+            setTextColor(mutedTextColor)
             gravity = Gravity.CENTER
+            setPadding(0, 8, 0, 0)
         }
-        root.addView(subtitle)
+        header.addView(subtitle)
+        root.addView(header)
 
         val buttonRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
+            setPadding(0, 18, 0, 18)
         }
 
-        val switchButton = Button(this).apply {
-            text = "Charakter"
-            setOnClickListener { switchCharacter() }
-        }
-        buttonRow.addView(switchButton, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-
-        val createButton = Button(this).apply {
-            text = "Neu"
-            setOnClickListener { createCharacterFromInput() }
-        }
-        buttonRow.addView(createButton, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-
-        val clearButton = Button(this).apply {
-            text = "Leeren"
-            setOnClickListener { clearChat() }
-        }
-        buttonRow.addView(clearButton, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        buttonRow.addView(actionButton("Charakter") { switchCharacter() }, LinearLayout.LayoutParams(0, 58, 1f).apply { setMargins(0, 0, 10, 0) })
+        buttonRow.addView(actionButton("Neu") { createCharacterFromInput() }, LinearLayout.LayoutParams(0, 58, 1f).apply { setMargins(10, 0, 10, 0) })
+        buttonRow.addView(actionButton("Leeren") { clearChat() }, LinearLayout.LayoutParams(0, 58, 1f).apply { setMargins(10, 0, 0, 0) })
         root.addView(buttonRow)
 
-        scrollView = ScrollView(this)
+        scrollView = ScrollView(this).apply {
+            setPadding(0, 0, 0, 0)
+        }
         messagesView = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
+            setPadding(0, 8, 0, 8)
         }
         scrollView.addView(messagesView)
         root.addView(scrollView, LinearLayout.LayoutParams(
@@ -88,27 +104,46 @@ class MainActivity : Activity() {
             1f
         ))
 
-        val inputRow = LinearLayout(this).apply {
+        val inputCard = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(16, 12, 16, 12)
+            background = rounded(panelColor, 28f)
         }
 
         input = EditText(this).apply {
-            hint = "Nachricht oder neuer Charakter: Name; Beschreibung; Begruessung"
+            hint = "Nachricht schreiben..."
+            setHintTextColor(mutedTextColor)
+            setTextColor(textColor)
+            textSize = 16f
             setSingleLine(false)
             minLines = 1
             maxLines = 4
+            background = null
         }
-        inputRow.addView(input, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        inputCard.addView(input, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
 
         val sendButton = Button(this).apply {
             text = "Senden"
+            setTextColor(Color.WHITE)
+            background = rounded(primaryColor, 24f)
             setOnClickListener { sendMessage() }
         }
-        inputRow.addView(sendButton)
-        root.addView(inputRow)
+        inputCard.addView(sendButton, LinearLayout.LayoutParams(150, 58).apply { setMargins(14, 0, 0, 0) })
+        root.addView(inputCard)
 
         setContentView(root)
         loadCurrentChat()
+    }
+
+    private fun actionButton(label: String, onClick: () -> Unit): Button {
+        return Button(this).apply {
+            text = label
+            textSize = 13f
+            setTextColor(textColor)
+            background = rounded(Color.rgb(30, 41, 59), 22f)
+            setOnClickListener { onClick() }
+        }
     }
 
     private fun switchCharacter() {
@@ -120,7 +155,7 @@ class MainActivity : Activity() {
     private fun createCharacterFromInput() {
         val raw = input.text.toString().trim()
         if (raw.isEmpty()) {
-            addSystemMessage("Format: Name; Beschreibung; Begruessung")
+            addSystemMessage("Neuer Charakter: Name; Beschreibung; Begruessung")
             return
         }
         val parts = raw.split(";").map { it.trim() }
@@ -165,7 +200,7 @@ class MainActivity : Activity() {
     }
 
     private fun updateCharacterHeader() {
-        subtitle.text = "Charakter: ${currentCharacter.name} - ${currentCharacter.description}"
+        subtitle.text = "${currentCharacter.name} • ${currentCharacter.description}"
     }
 
     private fun sendMessage() {
@@ -186,13 +221,41 @@ class MainActivity : Activity() {
     private fun renderChat() {
         messagesView.removeAllViews()
         chatMessages.forEach { message ->
-            val bubble = TextView(this).apply {
-                this.text = "${message.sender}: ${message.text}"
-                textSize = 16f
-                setPadding(16, 14, 16, 14)
+            val isUser = message.sender == "Du"
+            val isSystem = message.sender == "System"
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = if (isUser) Gravity.END else Gravity.START
+                setPadding(0, 7, 0, 7)
             }
-            messagesView.addView(bubble)
+
+            val bubble = TextView(this).apply {
+                text = if (isSystem) message.text else "${message.sender}\n${message.text}"
+                textSize = if (isSystem) 13f else 16f
+                setTextColor(if (isSystem) mutedTextColor else textColor)
+                setPadding(22, 16, 22, 16)
+                background = rounded(
+                    when {
+                        isSystem -> Color.rgb(15, 23, 42)
+                        isUser -> userBubbleColor
+                        else -> aiBubbleColor
+                    },
+                    26f
+                )
+            }
+            row.addView(bubble, LinearLayout.LayoutParams(
+                (resources.displayMetrics.widthPixels * 0.78f).toInt(),
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ))
+            messagesView.addView(row)
         }
-        scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
+        scrollView.post { scrollView.fullScroll(View.FOCUS_DOWN) }
+    }
+
+    private fun rounded(color: Int, radius: Float): GradientDrawable {
+        return GradientDrawable().apply {
+            setColor(color)
+            cornerRadius = radius
+        }
     }
 }
