@@ -7,7 +7,6 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.view.Gravity
 import android.view.View
-import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -87,7 +86,7 @@ class MainActivity : Activity() {
 
         buttonRow.addView(actionButton("Figur") { switchCharacter() }, LinearLayout.LayoutParams(0, 62, 1f).apply { setMargins(0, 0, 10, 0) })
         buttonRow.addView(actionButton("Neu") { createCharacterFromInput() }, LinearLayout.LayoutParams(0, 62, 1f).apply { setMargins(10, 0, 10, 0) })
-        buttonRow.addView(actionButton("Clear") { clearChat() }, LinearLayout.LayoutParams(0, 62, 1f).apply { setMargins(10, 0, 0, 0) })
+        buttonRow.addView(actionButton("Leeren") { clearChat() }, LinearLayout.LayoutParams(0, 62, 1f).apply { setMargins(10, 0, 0, 0) })
         root.addView(buttonRow)
 
         scrollView = ScrollView(this).apply {
@@ -133,7 +132,7 @@ class MainActivity : Activity() {
             background = rounded(primaryColor, 24f)
             setOnClickListener { sendMessage() }
         }
-        inputCard.addView(sendButton, LinearLayout.LayoutParams(170, 62).apply { setMargins(14, 0, 0, 0) })
+        inputCard.addView(sendButton, LinearLayout.LayoutParams(190, 62).apply { setMargins(14, 0, 0, 0) })
         root.addView(inputCard)
 
         setContentView(root)
