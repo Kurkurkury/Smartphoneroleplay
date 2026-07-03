@@ -1,25 +1,42 @@
 # Smartphoneroleplay
 
-Eine erste Android-App-Grundstruktur fuer eine Smartphone-Roleplay-Chat-App.
+Android/Kotlin-Prototyp fuer eine Smartphone-Roleplay-Chat-App.
 
-## Stand
+## Aktueller Stand
 
-Diese Version ist ein minimales Android/Kotlin-Projekt mit:
+Diese Version enthaelt:
 
-- Startscreen fuer eine Roleplay-App
+- native Android-App-Struktur
 - Chat-Oberflaeche
-- Charaktername: Reya
-- Eingabefeld
-- lokaler Demo-Antwortlogik ohne Server
+- Demo-Charaktere: Reya, Kael, Mira
+- Charakterwechsel
+- lokale Demo-Antwortlogik ohne Server
+- lokale Chat-Speicherung pro Charakter
+- Chat leeren Funktion
+- einfache Erstellung eigener Charaktere
+
+## Eigene Charaktere erstellen
+
+Im Eingabefeld folgendes Format verwenden und danach den Button `Neu` druecken:
+
+```text
+Name; Beschreibung; Begruessung
+```
+
+Beispiel:
+
+```text
+Luna; Vampirjaegerin in einer dunklen Stadt; Ich bin Luna. Bleib nah bei mir.
+```
 
 ## Naechste Ausbaustufen
 
-1. Charakter-Editor
-2. Szenario-Auswahl
-3. Speicher fuer Chatverlauf
-4. Verbindung zu einer KI-API oder lokaler KI
+1. GitHub Actions APK-Build
+2. moderne UI
+3. Szenario-Auswahl
+4. echte KI-Anbindung
 5. Bildgenerierung passend zur Handlung
-6. APK-Build ueber Android Studio oder GitHub Actions
+6. Memory/Langzeitgedaechtnis
 
 ## Build-Hinweis
 
