@@ -11,10 +11,11 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import com.kurkurkury.smartphoneroleplay.ai.DemoAiReplyClient
 import com.kurkurkury.smartphoneroleplay.data.CharacterRepository
 import com.kurkurkury.smartphoneroleplay.data.ChatStorage
 import com.kurkurkury.smartphoneroleplay.data.CustomCharacterStorage
-import com.kurkurkury.smartphoneroleplay.data.DemoReplyEngine
+import com.kurkurkury.smartphoneroleplay.engine.ChatEngine
 import com.kurkurkury.smartphoneroleplay.model.ChatMessage
 import com.kurkurkury.smartphoneroleplay.model.RoleplayCharacter
 
@@ -25,6 +26,7 @@ class MainActivity : Activity() {
     private lateinit var subtitle: TextView
     private lateinit var storage: ChatStorage
     private lateinit var characterStorage: CustomCharacterStorage
+    private lateinit var chatEngine: ChatEngine
 
     private val characters = mutableListOf<RoleplayCharacter>()
     private var currentCharacterIndex = 0
@@ -44,6 +46,7 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         storage = ChatStorage(this)
         characterStorage = CustomCharacterStorage(this)
+        chatEngine = ChatEngine(DemoAiReplyClient())
         characters.addAll(CharacterRepository.defaultCharacters)
         characters.addAll(characterStorage.load())
         window.statusBarColor = backgroundColor
@@ -214,7 +217,7 @@ class MainActivity : Activity() {
         if (text.isEmpty()) return
         input.setText("")
         chatMessages.add(ChatMessage("Du", text))
-        chatMessages.add(ChatMessage(currentCharacter.name, DemoReplyEngine.reply(currentCharacter, text)))
+        chatMessages.add(chatEngine.createReply(currentCharacter, chatMessages, text))
         renderChat()
         saveCurrentChat()
     }
