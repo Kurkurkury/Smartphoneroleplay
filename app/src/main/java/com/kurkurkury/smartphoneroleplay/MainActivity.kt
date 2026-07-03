@@ -85,9 +85,9 @@ class MainActivity : Activity() {
             setPadding(0, 18, 0, 18)
         }
 
-        buttonRow.addView(actionButton("Charakter") { switchCharacter() }, LinearLayout.LayoutParams(0, 58, 1f).apply { setMargins(0, 0, 10, 0) })
-        buttonRow.addView(actionButton("Neu") { createCharacterFromInput() }, LinearLayout.LayoutParams(0, 58, 1f).apply { setMargins(10, 0, 10, 0) })
-        buttonRow.addView(actionButton("Leeren") { clearChat() }, LinearLayout.LayoutParams(0, 58, 1f).apply { setMargins(10, 0, 0, 0) })
+        buttonRow.addView(actionButton("Figur") { switchCharacter() }, LinearLayout.LayoutParams(0, 62, 1f).apply { setMargins(0, 0, 10, 0) })
+        buttonRow.addView(actionButton("Neu") { createCharacterFromInput() }, LinearLayout.LayoutParams(0, 62, 1f).apply { setMargins(10, 0, 10, 0) })
+        buttonRow.addView(actionButton("Clear") { clearChat() }, LinearLayout.LayoutParams(0, 62, 1f).apply { setMargins(10, 0, 0, 0) })
         root.addView(buttonRow)
 
         scrollView = ScrollView(this).apply {
@@ -123,25 +123,32 @@ class MainActivity : Activity() {
         }
         inputCard.addView(input, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
 
-        val sendButton = Button(this).apply {
+        val sendButton = TextView(this).apply {
             text = "Senden"
+            textSize = 15f
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
             setTextColor(Color.WHITE)
+            setPadding(20, 0, 20, 0)
             background = rounded(primaryColor, 24f)
             setOnClickListener { sendMessage() }
         }
-        inputCard.addView(sendButton, LinearLayout.LayoutParams(150, 58).apply { setMargins(14, 0, 0, 0) })
+        inputCard.addView(sendButton, LinearLayout.LayoutParams(170, 62).apply { setMargins(14, 0, 0, 0) })
         root.addView(inputCard)
 
         setContentView(root)
         loadCurrentChat()
     }
 
-    private fun actionButton(label: String, onClick: () -> Unit): Button {
-        return Button(this).apply {
+    private fun actionButton(label: String, onClick: () -> Unit): TextView {
+        return TextView(this).apply {
             text = label
-            textSize = 13f
-            setTextColor(textColor)
-            background = rounded(Color.rgb(30, 41, 59), 22f)
+            textSize = 14f
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            setPadding(8, 0, 8, 0)
+            background = rounded(Color.rgb(37, 50, 72), 22f)
             setOnClickListener { onClick() }
         }
     }
@@ -226,7 +233,7 @@ class MainActivity : Activity() {
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = if (isUser) Gravity.END else Gravity.START
-                setPadding(0, 7, 0, 7)
+                setPadding(0, 8, 0, 8)
             }
 
             val bubble = TextView(this).apply {
