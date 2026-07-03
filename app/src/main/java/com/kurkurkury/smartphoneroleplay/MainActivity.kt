@@ -94,7 +94,7 @@ class MainActivity : Activity() {
 
         input = EditText(this).apply {
             hint = "Nachricht oder neuer Charakter: Name; Beschreibung; Begruessung"
-            singleLine = false
+            setSingleLine(false)
             minLines = 1
             maxLines = 4
         }
