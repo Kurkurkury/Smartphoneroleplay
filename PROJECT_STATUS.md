@@ -2,7 +2,7 @@
 
 ## Meilenstein 1
 
-Status: ANGELEGT
+Status: ERLEDIGT
 
 Erstellt wurden:
 
@@ -10,19 +10,31 @@ Erstellt wurden:
 - App-Modul
 - MainActivity in Kotlin
 - einfache Chat-Oberflaeche
-- Demo-Charakter Reya
-- lokale Demo-Antwortlogik
-- Android Manifest
+- Android Manifest mit Launcher-Konfiguration
 - App Theme
+- Demo-Charaktere: Reya, Kael, Mira
+- Charakterdatenmodell
+- Chatnachrichtenmodell
+- CharacterRepository
+- DemoReplyEngine
+- Charakterwechsel in der App
 
-## Aktuelle Einschraenkung
+## Aktueller Funktionsstand
 
-Das Manifest ist aktuell minimal und enthaelt noch keinen Launcher-Intent-Filter. Dadurch ist die App-Struktur vorhanden, aber der Start ueber den normalen App-Launcher muss im naechsten Schritt sauber ergaenzt werden.
+Die App ist ein erster nativer Android-Prototyp. Sie zeigt einen Chat, erlaubt Nachrichten einzugeben, antwortet lokal mit Demo-Logik und kann zwischen mehreren Charakteren wechseln.
+
+## Noch nicht final getestet
+
+- echter APK-Build
+- Installation auf Android-Geraet
+- Gradle Wrapper im Repository
+- persistente Speicherung der Chats
+- echte KI-Anbindung
+- Bildgenerierung
 
 ## Naechster Meilenstein
 
-- Manifest finalisieren
-- Gradle Wrapper oder Build-Anleitung ergaenzen
-- Charakterdatenmodell erstellen
-- Chatnachrichtenmodell erstellen
-- lokale Speicherung vorbereiten
+- Gradle Wrapper oder GitHub Actions Build ergaenzen
+- lokale Speicherung fuer Chatverlauf vorbereiten
+- Charakter-Erstellen-Screen bauen
+- spaeter echte KI-Schnittstelle anbinden
