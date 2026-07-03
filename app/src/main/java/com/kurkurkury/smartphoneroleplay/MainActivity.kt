@@ -8,11 +8,20 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import com.kurkurkury.smartphoneroleplay.data.CharacterRepository
+import com.kurkurkury.smartphoneroleplay.data.DemoReplyEngine
+import com.kurkurkury.smartphoneroleplay.model.RoleplayCharacter
 
 class MainActivity : Activity() {
     private lateinit var messages: LinearLayout
     private lateinit var input: EditText
     private lateinit var scrollView: ScrollView
+    private lateinit var subtitle: TextView
+
+    private val characters = CharacterRepository.defaultCharacters
+    private var currentCharacterIndex = 0
+    private val currentCharacter: RoleplayCharacter
+        get() = characters[currentCharacterIndex]
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -29,12 +38,17 @@ class MainActivity : Activity() {
         }
         root.addView(title)
 
-        val subtitle = TextView(this).apply {
-            text = "Charakter: Reya"
+        subtitle = TextView(this).apply {
             textSize = 16f
             gravity = Gravity.CENTER
         }
         root.addView(subtitle)
+
+        val switchButton = Button(this).apply {
+            text = "Charakter wechseln"
+            setOnClickListener { switchCharacter() }
+        }
+        root.addView(switchButton)
 
         scrollView = ScrollView(this)
         messages = LinearLayout(this).apply {
@@ -67,7 +81,19 @@ class MainActivity : Activity() {
         root.addView(inputRow)
 
         setContentView(root)
-        addMessage("Reya", "Hi, ich bin Reya. Starte eine Szene und ich spiele mit dir weiter.")
+        updateCharacterHeader()
+        addMessage(currentCharacter.name, currentCharacter.greeting)
+    }
+
+    private fun switchCharacter() {
+        currentCharacterIndex = (currentCharacterIndex + 1) % characters.size
+        messages.removeAllViews()
+        updateCharacterHeader()
+        addMessage(currentCharacter.name, currentCharacter.greeting)
+    }
+
+    private fun updateCharacterHeader() {
+        subtitle.text = "Charakter: ${currentCharacter.name} - ${currentCharacter.description}"
     }
 
     private fun sendMessage() {
@@ -75,7 +101,7 @@ class MainActivity : Activity() {
         if (text.isEmpty()) return
         input.setText("")
         addMessage("Du", text)
-        addMessage("Reya", createDemoReply(text))
+        addMessage(currentCharacter.name, DemoReplyEngine.reply(currentCharacter, text))
     }
 
     private fun addMessage(sender: String, text: String) {
@@ -86,14 +112,5 @@ class MainActivity : Activity() {
         }
         messages.addView(bubble)
         scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
-    }
-
-    private fun createDemoReply(userText: String): String {
-        return when {
-            userText.contains("wald", ignoreCase = true) -> "Reya schaut zwischen die Baeume und fluestert: Ich habe dort etwas gesehen."
-            userText.contains("stadt", ignoreCase = true) -> "Reya zieht ihre Kapuze tiefer ins Gesicht und folgt dir durch die Stadt."
-            userText.contains("kampf", ignoreCase = true) -> "Reya hebt die Hand. Noch nicht. Wir brauchen zuerst einen Plan."
-            else -> "Reya nickt langsam und antwortet passend zur Szene: Erzaehl mir mehr."
-        }
     }
 }
