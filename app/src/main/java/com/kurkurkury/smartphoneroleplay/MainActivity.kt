@@ -21,12 +21,17 @@ import com.kurkurkury.smartphoneroleplay.data.CustomCharacterStorage
 import com.kurkurkury.smartphoneroleplay.engine.ChatEngine
 import com.kurkurkury.smartphoneroleplay.model.ChatMessage
 import com.kurkurkury.smartphoneroleplay.model.RoleplayCharacter
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class MainActivity : Activity() {
     private lateinit var messagesView: LinearLayout
     private lateinit var input: EditText
     private lateinit var scrollView: ScrollView
     private lateinit var subtitle: TextView
+    private lateinit var modelStatus: TextView
+    private lateinit var characterChip: TextView
     private lateinit var storage: ChatStorage
     private lateinit var characterStorage: CustomCharacterStorage
     private lateinit var chatEngine: ChatEngine
@@ -39,13 +44,19 @@ class MainActivity : Activity() {
     private val currentCharacter: RoleplayCharacter
         get() = characters[currentCharacterIndex]
 
-    private val backgroundColor = Color.rgb(10, 15, 24)
-    private val panelColor = Color.rgb(18, 25, 38)
-    private val primaryColor = Color.rgb(126, 87, 194)
-    private val userBubbleColor = Color.rgb(94, 53, 177)
-    private val aiBubbleColor = Color.rgb(31, 41, 55)
-    private val textColor = Color.rgb(241, 245, 249)
+    private val backgroundColor = Color.rgb(6, 10, 18)
+    private val panelColor = Color.rgb(15, 23, 36)
+    private val elevatedPanelColor = Color.rgb(20, 30, 46)
+    private val buttonColor = Color.rgb(38, 52, 77)
+    private val primaryColor = Color.rgb(139, 92, 246)
+    private val accentColor = Color.rgb(34, 211, 238)
+    private val userBubbleColor = Color.rgb(109, 40, 217)
+    private val aiBubbleColor = Color.rgb(30, 41, 59)
+    private val systemBubbleColor = Color.rgb(17, 24, 39)
+    private val textColor = Color.rgb(248, 250, 252)
     private val mutedTextColor = Color.rgb(148, 163, 184)
+    private val subtleBorderColor = Color.rgb(51, 65, 85)
+    private val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -60,96 +71,18 @@ class MainActivity : Activity() {
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(24, 32, 24, 20)
+            setPadding(dp(16), dp(18), dp(16), dp(12))
             setBackgroundColor(backgroundColor)
         }
 
-        val header = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(24, 20, 24, 20)
-            background = rounded(panelColor, 28f)
-        }
-
-        val title = TextView(this).apply {
-            text = "Smartphone Roleplay"
-            textSize = 26f
-            setTextColor(textColor)
-            typeface = Typeface.DEFAULT_BOLD
-            gravity = Gravity.CENTER
-        }
-        header.addView(title)
-
-        subtitle = TextView(this).apply {
-            textSize = 14f
-            setTextColor(mutedTextColor)
-            gravity = Gravity.CENTER
-            setPadding(0, 8, 0, 0)
-        }
-        header.addView(subtitle)
-        root.addView(header)
-
-        val buttonRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setPadding(0, 18, 0, 10)
-        }
-
-        buttonRow.addView(actionButton("Figur") { switchCharacter() }, LinearLayout.LayoutParams(0, 62, 1f).apply { setMargins(0, 0, 10, 0) })
-        buttonRow.addView(actionButton("Neu") { createCharacterFromInput() }, LinearLayout.LayoutParams(0, 62, 1f).apply { setMargins(10, 0, 10, 0) })
-        buttonRow.addView(actionButton("Leeren") { clearChat() }, LinearLayout.LayoutParams(0, 62, 1f).apply { setMargins(10, 0, 0, 0) })
-        root.addView(buttonRow)
-
-        val modelRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setPadding(0, 0, 0, 16)
-        }
-        modelRow.addView(actionButton("Modell waehlen") { openModelPicker() }, LinearLayout.LayoutParams(0, 62, 1f))
-        root.addView(modelRow)
-
-        scrollView = ScrollView(this).apply {
-            setPadding(0, 0, 0, 0)
-        }
-        messagesView = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(0, 8, 0, 8)
-        }
-        scrollView.addView(messagesView)
-        root.addView(scrollView, LinearLayout.LayoutParams(
+        root.addView(createHeader())
+        root.addView(createActionGrid())
+        root.addView(createChatSurface(), LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
             0,
             1f
-        ))
-
-        val inputCard = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(16, 12, 16, 12)
-            background = rounded(panelColor, 28f)
-        }
-
-        input = EditText(this).apply {
-            hint = "Nachricht schreiben..."
-            setHintTextColor(mutedTextColor)
-            setTextColor(textColor)
-            textSize = 16f
-            setSingleLine(false)
-            minLines = 1
-            maxLines = 4
-            background = null
-        }
-        inputCard.addView(input, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-
-        val sendButton = TextView(this).apply {
-            text = "Senden"
-            textSize = 15f
-            typeface = Typeface.DEFAULT_BOLD
-            gravity = Gravity.CENTER
-            setTextColor(Color.WHITE)
-            setPadding(20, 0, 20, 0)
-            background = rounded(primaryColor, 24f)
-            setOnClickListener { sendMessage() }
-        }
-        inputCard.addView(sendButton, LinearLayout.LayoutParams(190, 62).apply { setMargins(14, 0, 0, 0) })
-        root.addView(inputCard)
+        ).apply { setMargins(0, dp(12), 0, dp(12)) })
+        root.addView(createInputBar())
 
         setContentView(root)
         loadCurrentChat()
@@ -162,7 +95,154 @@ class MainActivity : Activity() {
             addSystemMessage("Modell wird importiert. Das kann bei grossen Dateien laenger dauern...")
             val result = modelFileManager.importModel(uri)
             addSystemMessage(result.message)
+            updateCharacterHeader()
         }
+    }
+
+    private fun createHeader(): LinearLayout {
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(16), dp(18), dp(16))
+            background = rounded(elevatedPanelColor, 30f, subtleBorderColor, 1)
+        }
+
+        val topRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+
+        val appMark = TextView(this).apply {
+            text = "SR"
+            textSize = 15f
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            background = rounded(primaryColor, 18f)
+        }
+        topRow.addView(appMark, LinearLayout.LayoutParams(dp(44), dp(44)).apply { setMargins(0, 0, dp(12), 0) })
+
+        val titleBlock = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+
+        val title = TextView(this).apply {
+            text = "Smartphone Roleplay"
+            textSize = 25f
+            setTextColor(textColor)
+            typeface = Typeface.DEFAULT_BOLD
+            includeFontPadding = false
+        }
+        titleBlock.addView(title)
+
+        subtitle = TextView(this).apply {
+            textSize = 13f
+            setTextColor(mutedTextColor)
+            setPadding(0, dp(5), 0, 0)
+            maxLines = 2
+        }
+        titleBlock.addView(subtitle)
+        topRow.addView(titleBlock, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        header.addView(topRow)
+
+        val statusRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(14), 0, 0)
+        }
+
+        characterChip = TextView(this).apply {
+            textSize = 12f
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+            setTextColor(textColor)
+            setPadding(dp(12), 0, dp(12), 0)
+            background = rounded(Color.rgb(37, 50, 72), 18f)
+        }
+        statusRow.addView(characterChip, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(34)).apply { setMargins(0, 0, dp(8), 0) })
+
+        modelStatus = TextView(this).apply {
+            textSize = 12f
+            gravity = Gravity.CENTER_VERTICAL
+            setTextColor(mutedTextColor)
+            setPadding(dp(12), 0, dp(12), 0)
+            background = rounded(Color.rgb(10, 18, 31), 18f, subtleBorderColor, 1)
+            maxLines = 1
+        }
+        statusRow.addView(modelStatus, LinearLayout.LayoutParams(0, dp(34), 1f))
+        header.addView(statusRow)
+
+        return header
+    }
+
+    private fun createActionGrid(): LinearLayout {
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, dp(12), 0, 0)
+        }
+
+        val buttonRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+        }
+        buttonRow.addView(actionButton("Figur", "wechseln") { switchCharacter() }, LinearLayout.LayoutParams(0, dp(58), 1f).apply { setMargins(0, 0, dp(8), 0) })
+        buttonRow.addView(actionButton("Neu", "erstellen") { createCharacterFromInput() }, LinearLayout.LayoutParams(0, dp(58), 1f).apply { setMargins(0, 0, dp(8), 0) })
+        buttonRow.addView(actionButton("Leeren", "reset") { clearChat() }, LinearLayout.LayoutParams(0, dp(58), 1f))
+        container.addView(buttonRow)
+
+        container.addView(actionButton("Modell waehlen", "GGUF importieren") { openModelPicker() }, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            dp(58)
+        ).apply { setMargins(0, dp(8), 0, 0) })
+
+        return container
+    }
+
+    private fun createChatSurface(): ScrollView {
+        scrollView = ScrollView(this).apply {
+            setPadding(0, 0, 0, 0)
+            isFillViewport = true
+            background = rounded(Color.rgb(8, 13, 23), 28f, Color.rgb(18, 27, 43), 1)
+        }
+        messagesView = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(12), dp(14), dp(12), dp(14))
+        }
+        scrollView.addView(messagesView)
+        return scrollView
+    }
+
+    private fun createInputBar(): LinearLayout {
+        val inputCard = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(14), dp(10), dp(10), dp(10))
+            background = rounded(panelColor, 28f, subtleBorderColor, 1)
+        }
+
+        input = EditText(this).apply {
+            hint = "Nachricht schreiben..."
+            setHintTextColor(mutedTextColor)
+            setTextColor(textColor)
+            textSize = 16f
+            setSingleLine(false)
+            minLines = 1
+            maxLines = 4
+            background = null
+            includeFontPadding = false
+        }
+        inputCard.addView(input, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+
+        val sendButton = TextView(this).apply {
+            text = "Senden"
+            textSize = 15f
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            setPadding(dp(18), 0, dp(18), 0)
+            background = rounded(primaryColor, 24f)
+            setOnClickListener { sendMessage() }
+        }
+        inputCard.addView(sendButton, LinearLayout.LayoutParams(dp(104), dp(52)).apply { setMargins(dp(10), 0, 0, 0) })
+        return inputCard
     }
 
     private fun openModelPicker() {
@@ -173,17 +253,33 @@ class MainActivity : Activity() {
         startActivityForResult(intent, modelPickerRequestCode)
     }
 
-    private fun actionButton(label: String, onClick: () -> Unit): TextView {
-        return TextView(this).apply {
+    private fun actionButton(label: String, caption: String, onClick: () -> Unit): LinearLayout {
+        val button = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(dp(8), dp(6), dp(8), dp(6))
+            background = rounded(buttonColor, 18f, Color.rgb(59, 76, 108), 1)
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { onClick() }
+        }
+        button.addView(TextView(this).apply {
             text = label
-            textSize = 14f
+            textSize = 15f
             typeface = Typeface.DEFAULT_BOLD
             gravity = Gravity.CENTER
             setTextColor(Color.WHITE)
-            setPadding(8, 0, 8, 0)
-            background = rounded(Color.rgb(37, 50, 72), 22f)
-            setOnClickListener { onClick() }
-        }
+            includeFontPadding = false
+        })
+        button.addView(TextView(this).apply {
+            text = caption
+            textSize = 10f
+            gravity = Gravity.CENTER
+            setTextColor(mutedTextColor)
+            includeFontPadding = false
+            setPadding(0, dp(3), 0, 0)
+        })
+        return button
     }
 
     private fun switchCharacter() {
@@ -240,7 +336,13 @@ class MainActivity : Activity() {
     }
 
     private fun updateCharacterHeader() {
-        subtitle.text = "${currentCharacter.name} • ${currentCharacter.description}"
+        subtitle.text = currentCharacter.description
+        characterChip.text = "${currentCharacter.name} • ${currentCharacter.personality.take(24)}"
+        modelStatus.text = if (modelFileManager.modelExists()) {
+            "KI-Modell aktiv • ${modelFileManager.modelStatusMessage().removePrefix("Lokales Modell gefunden: ")}"
+        } else {
+            "Demo-Modus • kein Modell importiert"
+        }
     }
 
     private fun sendMessage() {
@@ -248,6 +350,8 @@ class MainActivity : Activity() {
         if (text.isEmpty()) return
         input.setText("")
         chatMessages.add(ChatMessage("Du", text))
+        renderChat()
+        scrollView.post { scrollView.fullScroll(View.FOCUS_DOWN) }
         chatMessages.add(chatEngine.createReply(currentCharacter, chatMessages, text))
         renderChat()
         saveCurrentChat()
@@ -261,42 +365,126 @@ class MainActivity : Activity() {
 
     private fun renderChat() {
         messagesView.removeAllViews()
+        if (chatMessages.size <= 1) {
+            messagesView.addView(sceneHintCard())
+        }
         chatMessages.forEach { message ->
-            val isUser = message.sender == "Du"
-            val isSystem = message.sender == "System"
-            val row = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = if (isUser) Gravity.END else Gravity.START
-                setPadding(0, 8, 0, 8)
-            }
-
-            val bubble = TextView(this).apply {
-                text = if (isSystem) message.text else "${message.sender}\n${message.text}"
-                textSize = if (isSystem) 13f else 16f
-                setTextColor(if (isSystem) mutedTextColor else textColor)
-                setPadding(22, 16, 22, 16)
-                background = rounded(
-                    when {
-                        isSystem -> Color.rgb(15, 23, 42)
-                        isUser -> userBubbleColor
-                        else -> aiBubbleColor
-                    },
-                    26f
-                )
-            }
-            row.addView(bubble, LinearLayout.LayoutParams(
-                (resources.displayMetrics.widthPixels * 0.78f).toInt(),
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ))
-            messagesView.addView(row)
+            messagesView.addView(messageRow(message))
         }
         scrollView.post { scrollView.fullScroll(View.FOCUS_DOWN) }
     }
 
-    private fun rounded(color: Int, radius: Float): GradientDrawable {
+    private fun sceneHintCard(): LinearLayout {
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(14), dp(16), dp(14))
+            background = rounded(Color.rgb(11, 18, 32), 24f, Color.rgb(35, 48, 75), 1)
+        }
+        card.addView(TextView(this).apply {
+            text = "Szenenstart"
+            textSize = 14f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(accentColor)
+        })
+        card.addView(TextView(this).apply {
+            text = "Schreibe einen Ort, eine Stimmung oder eine erste Handlung. ${currentCharacter.name} bleibt in der Rolle und spielt weiter."
+            textSize = 13f
+            setTextColor(mutedTextColor)
+            setPadding(0, dp(6), 0, 0)
+        })
+        card.layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { setMargins(0, 0, 0, dp(10)) }
+        return card
+    }
+
+    private fun messageRow(message: ChatMessage): LinearLayout {
+        val isUser = message.sender == "Du"
+        val isSystem = message.sender == "System"
+
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = when {
+                isUser -> Gravity.END
+                else -> Gravity.START
+            }
+            setPadding(0, dp(7), 0, dp(7))
+        }
+
+        if (!isUser && !isSystem) {
+            row.addView(avatarFor(message.sender), LinearLayout.LayoutParams(dp(38), dp(38)).apply { setMargins(0, dp(2), dp(8), 0) })
+        }
+
+        val stack = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = if (isUser) Gravity.END else Gravity.START
+        }
+
+        val meta = TextView(this).apply {
+            text = if (isSystem) "System • ${formatTime(message.timestampMillis)}" else "${message.sender} • ${formatTime(message.timestampMillis)}"
+            textSize = 11f
+            setTextColor(mutedTextColor)
+            gravity = if (isUser) Gravity.END else Gravity.START
+            setPadding(dp(4), 0, dp(4), dp(4))
+        }
+        stack.addView(meta)
+
+        val bubble = TextView(this).apply {
+            text = message.text
+            textSize = if (isSystem) 13f else 16f
+            setTextColor(if (isSystem) mutedTextColor else textColor)
+            setPadding(dp(16), dp(12), dp(16), dp(12))
+            background = rounded(
+                when {
+                    isSystem -> systemBubbleColor
+                    isUser -> userBubbleColor
+                    else -> aiBubbleColor
+                },
+                24f,
+                when {
+                    isUser -> primaryColor
+                    isSystem -> subtleBorderColor
+                    else -> Color.rgb(51, 65, 85)
+                },
+                1
+            )
+        }
+        stack.addView(bubble, LinearLayout.LayoutParams(
+            (resources.displayMetrics.widthPixels * if (isSystem) 0.84f else 0.72f).toInt(),
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ))
+
+        row.addView(stack)
+        return row
+    }
+
+    private fun avatarFor(name: String): TextView {
+        return TextView(this).apply {
+            text = name.take(1).uppercase(Locale.getDefault())
+            textSize = 14f
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            background = rounded(primaryColor, 19f)
+        }
+    }
+
+    private fun formatTime(timestampMillis: Long): String {
+        return timeFormat.format(Date(timestampMillis))
+    }
+
+    private fun dp(value: Int): Int {
+        return (value * resources.displayMetrics.density).toInt()
+    }
+
+    private fun rounded(color: Int, radius: Float, strokeColor: Int? = null, strokeDp: Int = 0): GradientDrawable {
         return GradientDrawable().apply {
             setColor(color)
-            cornerRadius = radius
+            cornerRadius = dp(radius.toInt()).toFloat()
+            if (strokeColor != null && strokeDp > 0) {
+                setStroke(dp(strokeDp), strokeColor)
+            }
         }
     }
 }
