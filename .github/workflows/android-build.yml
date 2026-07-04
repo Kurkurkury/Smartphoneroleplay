@@ -31,11 +31,40 @@ jobs:
         with:
           gradle-version: '8.7'
 
-      - name: Build debug APK
+      - name: Build stable debug APK
         run: gradle :app:assembleDebug --no-daemon
 
-      - name: Upload debug APK
+      - name: Upload stable debug APK
         uses: actions/upload-artifact@v4
         with:
           name: SmartphoneRoleplay-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+
+  assemble-native-debug:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Build native debug APK
+        run: gradle :app:assembleDebug --no-daemon -PenableNativeLlama=true
+
+      - name: Upload native debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: SmartphoneRoleplay-native-debug-apk
           path: app/build/outputs/apk/debug/*.apk
