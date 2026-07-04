@@ -20,11 +20,17 @@ class OnDeviceReplyClient(context: Context) : AiReplyClient {
             "\n\nUser: " + userMessage +
             "\n" + character.name + ":"
 
-        if (fileManager.modelExists()) {
-            return nativeBridge.nativeGenerate(fileManager.modelFile().absolutePath, prompt)
+        if (fileManager.modelExists() && nativeBridge.isAvailable) {
+            val nativeResult = nativeBridge.generate(fileManager.modelFile().absolutePath, prompt)
+            if (nativeResult.ok) {
+                return nativeResult.text
+            }
+
+            val fallbackReply = fallback.generateReply(character, history, userMessage)
+            return "$fallbackReply\n\n[${nativeResult.text} Fallback-Antwort wurde genutzt.]"
         }
 
         val base = fallback.generateReply(character, history, userMessage)
-        return "$base\n\n[${nativeBridge.nativeStatus()} ${fileManager.modelStatusMessage()}]"
+        return "$base\n\n[${nativeBridge.status()} ${fileManager.modelStatusMessage()}]"
     }
 }
