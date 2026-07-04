@@ -11,7 +11,7 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
-import com.kurkurkury.smartphoneroleplay.ai.DemoAiReplyClient
+import com.kurkurkury.smartphoneroleplay.ai.OnDeviceReplyClient
 import com.kurkurkury.smartphoneroleplay.data.CharacterRepository
 import com.kurkurkury.smartphoneroleplay.data.ChatStorage
 import com.kurkurkury.smartphoneroleplay.data.CustomCharacterStorage
@@ -46,7 +46,7 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         storage = ChatStorage(this)
         characterStorage = CustomCharacterStorage(this)
-        chatEngine = ChatEngine(DemoAiReplyClient())
+        chatEngine = ChatEngine(OnDeviceReplyClient(this))
         characters.addAll(CharacterRepository.defaultCharacters)
         characters.addAll(characterStorage.load())
         window.statusBarColor = backgroundColor
