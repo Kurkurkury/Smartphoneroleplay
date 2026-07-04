@@ -3,6 +3,14 @@ plugins {
     id 'org.jetbrains.kotlin.android'
 }
 
+// Native llama.cpp support is intentionally opt-in. The app must remain buildable
+// and usable as a local roleplay prototype even when the native runtime is not
+// available on a developer machine, CI runner, emulator, or target phone.
+def enableNativeLlama = providers.gradleProperty('enableNativeLlama')
+        .map { it.equals('true', true) }
+        .orElse(false)
+        .get()
+
 android {
     namespace 'com.kurkurkury.smartphoneroleplay'
     compileSdk 35
@@ -11,28 +19,32 @@ android {
         applicationId 'com.kurkurkury.smartphoneroleplay'
         minSdk 23
         targetSdk 35
-        versionCode 3
-        versionName '0.3.0'
+        versionCode 4
+        versionName '0.4.0'
         manifestPlaceholders = [
             launcherAction: 'android.intent.action.MAIN',
             launcherCategory: 'android.intent.category.LAUNCHER'
         ]
 
-        externalNativeBuild {
-            cmake {
-                cppFlags '-std=c++17 -O3'
+        if (enableNativeLlama) {
+            externalNativeBuild {
+                cmake {
+                    cppFlags '-std=c++17 -O3'
+                }
             }
-        }
 
-        ndk {
-            abiFilters 'arm64-v8a'
+            ndk {
+                abiFilters 'arm64-v8a'
+            }
         }
     }
 
-    externalNativeBuild {
-        cmake {
-            path file('src/main/cpp/CMakeLists.txt')
-            version '3.22.1'
+    if (enableNativeLlama) {
+        externalNativeBuild {
+            cmake {
+                path file('src/main/cpp/CMakeLists.txt')
+                version '3.22.1'
+            }
         }
     }
 
