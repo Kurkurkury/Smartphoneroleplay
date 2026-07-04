@@ -7,7 +7,7 @@ plugins {
 // and usable as a local roleplay prototype even when the native runtime is not
 // available on a developer machine, CI runner, emulator, or target phone.
 def enableNativeLlama = providers.gradleProperty('enableNativeLlama')
-        .map { it.equals('true', true) }
+        .map { it.toString().equalsIgnoreCase('true') }
         .orElse(false)
         .get()
 
