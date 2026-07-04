@@ -66,9 +66,25 @@ jobs:
           gradle-version: '8.7'
 
       - name: Build native debug APK
-        run: gradle :app:assembleDebug --no-daemon -PenableNativeLlama=true
+        shell: bash
+        run: |
+          set +e
+          gradle :app:assembleDebug --no-daemon -PenableNativeLlama=true > native-build.log 2>&1
+          code=$?
+          echo "Native build exit code: $code"
+          echo "---- native build tail ----"
+          tail -n 220 native-build.log || true
+          exit $code
+
+      - name: Upload native build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SmartphoneRoleplay-native-build-log
+          path: native-build.log
 
       - name: Upload native debug APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: SmartphoneRoleplay-native-debug-apk
