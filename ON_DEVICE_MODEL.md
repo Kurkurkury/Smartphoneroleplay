@@ -32,8 +32,20 @@ Android/data/com.kurkurkury.smartphoneroleplay/files/models/local-roleplay-model
 
 ## Aktueller Stand
 
-Die App erkennt den Modellpfad und ist architektonisch auf On-Device-KI vorbereitet. Die native GGUF-Ausfuehrung ist noch nicht integriert.
+Die App erkennt den Modellpfad und ist architektonisch auf On-Device-KI vorbereitet.
+
+Zusaetzlich ist jetzt eine native Android-Laufzeit vorbereitet:
+
+- Android NDK/CMake ist im Build aktiviert
+- arm64-v8a ist als Zielarchitektur gesetzt
+- `NativeLlamaBridge.kt` verbindet Kotlin mit JNI
+- `native_runtime.cpp` baut eine native Shared Library
+- `OnDeviceReplyClient` ruft die native Bridge auf
+
+## Noch nicht erledigt
+
+Die echte GGUF-Token-Generierung ist noch nicht eingebunden. Der aktuelle native Code ist bewusst ein stabiler Platzhalter, damit die App weiter erfolgreich baut.
 
 ## Naechster technischer Schritt
 
-Ein nativer Android-Inferenzkern muss eingebunden werden, zum Beispiel ueber eine llama.cpp-basierte Android/JNI-Schicht. Danach kann die App die GGUF-Datei direkt laden und Antworten ohne PC-Server erzeugen.
+Die native Platzhalter-Schicht muss durch einen echten GGUF-Inferenzkern ersetzt werden. Dafuer wird eine Android-kompatible llama.cpp/JNI-Integration benoetigt.
