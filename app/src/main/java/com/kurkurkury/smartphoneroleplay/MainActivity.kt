@@ -1,9 +1,11 @@
 package com.kurkurkury.smartphoneroleplay
 
 import android.app.Activity
+import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.net.Uri
 import android.os.Bundle
 import android.view.Gravity
 import android.view.View
@@ -11,6 +13,7 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import com.kurkurkury.smartphoneroleplay.ai.OnDeviceModelFileManager
 import com.kurkurkury.smartphoneroleplay.ai.OnDeviceReplyClient
 import com.kurkurkury.smartphoneroleplay.data.CharacterRepository
 import com.kurkurkury.smartphoneroleplay.data.ChatStorage
@@ -27,7 +30,9 @@ class MainActivity : Activity() {
     private lateinit var storage: ChatStorage
     private lateinit var characterStorage: CustomCharacterStorage
     private lateinit var chatEngine: ChatEngine
+    private lateinit var modelFileManager: OnDeviceModelFileManager
 
+    private val modelPickerRequestCode = 9124
     private val characters = mutableListOf<RoleplayCharacter>()
     private var currentCharacterIndex = 0
     private val chatMessages = mutableListOf<ChatMessage>()
@@ -46,6 +51,7 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         storage = ChatStorage(this)
         characterStorage = CustomCharacterStorage(this)
+        modelFileManager = OnDeviceModelFileManager(this)
         chatEngine = ChatEngine(OnDeviceReplyClient(this))
         characters.addAll(CharacterRepository.defaultCharacters)
         characters.addAll(characterStorage.load())
@@ -84,13 +90,20 @@ class MainActivity : Activity() {
 
         val buttonRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            setPadding(0, 18, 0, 18)
+            setPadding(0, 18, 0, 10)
         }
 
         buttonRow.addView(actionButton("Figur") { switchCharacter() }, LinearLayout.LayoutParams(0, 62, 1f).apply { setMargins(0, 0, 10, 0) })
         buttonRow.addView(actionButton("Neu") { createCharacterFromInput() }, LinearLayout.LayoutParams(0, 62, 1f).apply { setMargins(10, 0, 10, 0) })
         buttonRow.addView(actionButton("Leeren") { clearChat() }, LinearLayout.LayoutParams(0, 62, 1f).apply { setMargins(10, 0, 0, 0) })
         root.addView(buttonRow)
+
+        val modelRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, 0, 0, 16)
+        }
+        modelRow.addView(actionButton("Modell waehlen") { openModelPicker() }, LinearLayout.LayoutParams(0, 62, 1f))
+        root.addView(modelRow)
 
         scrollView = ScrollView(this).apply {
             setPadding(0, 0, 0, 0)
@@ -140,6 +153,24 @@ class MainActivity : Activity() {
 
         setContentView(root)
         loadCurrentChat()
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == modelPickerRequestCode && resultCode == RESULT_OK) {
+            val uri: Uri = data?.data ?: return
+            addSystemMessage("Modell wird importiert. Das kann bei grossen Dateien laenger dauern...")
+            val result = modelFileManager.importModel(uri)
+            addSystemMessage(result.message)
+        }
+    }
+
+    private fun openModelPicker() {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "*/*"
+        }
+        startActivityForResult(intent, modelPickerRequestCode)
     }
 
     private fun actionButton(label: String, onClick: () -> Unit): TextView {
@@ -225,6 +256,7 @@ class MainActivity : Activity() {
     private fun addSystemMessage(text: String) {
         chatMessages.add(ChatMessage("System", text))
         renderChat()
+        saveCurrentChat()
     }
 
     private fun renderChat() {
