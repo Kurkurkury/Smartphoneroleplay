@@ -14,6 +14,7 @@ def enableNativeLlama = providers.gradleProperty('enableNativeLlama')
 android {
     namespace 'com.kurkurkury.smartphoneroleplay'
     compileSdk 35
+    ndkVersion '27.2.12479018'
 
     defaultConfig {
         applicationId 'com.kurkurkury.smartphoneroleplay'
