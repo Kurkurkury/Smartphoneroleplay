@@ -45,6 +45,29 @@ class NativeLlamaBridge {
         return NativeGenerationResult(ok = isAvailable && modelFile.exists(), text = lines.joinToString("\n"))
     }
 
+    fun miniInferenceDiagnostic(modelPath: String): NativeGenerationResult {
+        val modelFile = File(modelPath)
+        if (!isAvailable) {
+            return NativeGenerationResult(false, status())
+        }
+        if (!modelFile.exists()) {
+            return NativeGenerationResult(false, "Mini-Inferenz Diagnose\nFehler: Modellpfad existiert nicht.")
+        }
+
+        return try {
+            val text = nativeMiniInferenceDiagnostic(modelPath).trim()
+            NativeGenerationResult(
+                ok = text.contains("Mini-Inferenz erfolgreich"),
+                text = text.ifBlank { "Mini-Inferenz Diagnose\nFehler: Native Test lieferte keine Ausgabe." }
+            )
+        } catch (error: Throwable) {
+            NativeGenerationResult(
+                ok = false,
+                text = "Mini-Inferenz Diagnose\nFehler: ${error.message ?: error.javaClass.simpleName}."
+            )
+        }
+    }
+
     fun generate(modelPath: String, prompt: String): NativeGenerationResult {
         if (!ENABLE_NATIVE_CHAT_GENERATION) {
             return NativeGenerationResult(
@@ -76,6 +99,8 @@ class NativeLlamaBridge {
     }
 
     private external fun nativeStatus(): String
+
+    private external fun nativeMiniInferenceDiagnostic(modelPath: String): String
 
     private external fun nativeGenerate(modelPath: String, prompt: String): String
 }
