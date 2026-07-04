@@ -7,35 +7,18 @@ import com.kurkurkury.smartphoneroleplay.model.RoleplayCharacter
 class OnDeviceReplyClient(context: Context) : AiReplyClient {
     private val fileManager = OnDeviceModelFileManager(context)
     private val fallback = DemoAiReplyClient()
-    private val nativeBridge = NativeLlamaBridge()
 
     override fun generateReply(
         character: RoleplayCharacter,
         history: List<ChatMessage>,
         userMessage: String
     ): String {
-        val prompt = RoleplayPromptBuilder.buildSystemPrompt(character) +
-            "\n\nBisheriger Verlauf:\n" +
-            RoleplayPromptBuilder.buildContext(history) +
-            "\n\nUser: " + userMessage +
-            "\n" + character.name + ":"
-
-        if (fileManager.modelExists() && nativeBridge.isAvailable && nativeBridge.isNativeChatGenerationEnabled) {
-            val nativeResult = nativeBridge.generate(fileManager.modelFile().absolutePath, prompt)
-            if (nativeResult.ok) {
-                return nativeResult.text
-            }
-
-            val fallbackReply = fallback.generateReply(character, history, userMessage)
-            return "$fallbackReply\n\n[${nativeResult.text} Fallback-Antwort wurde genutzt.]"
-        }
-
         val base = fallback.generateReply(character, history, userMessage)
-        val diagnostic = if (fileManager.modelExists()) {
-            nativeBridge.diagnostic(fileManager.modelFile().absolutePath).text
+        val modelInfo = if (fileManager.modelExists()) {
+            "Lokales Modell erkannt: ${fileManager.modelFile().length() / 1024 / 1024} MB. Native Diagnose ist vom normalen Senden getrennt, damit die App stabil bleibt."
         } else {
-            "${nativeBridge.status()} ${fileManager.modelStatusMessage()}"
+            "Kein lokales Modell importiert. Stabiler Demo-Modus aktiv."
         }
-        return "$base\n\n[$diagnostic]"
+        return "$base\n\n[$modelInfo]"
     }
 }
