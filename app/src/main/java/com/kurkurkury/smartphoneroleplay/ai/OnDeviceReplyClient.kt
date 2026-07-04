@@ -20,7 +20,7 @@ class OnDeviceReplyClient(context: Context) : AiReplyClient {
             "\n\nUser: " + userMessage +
             "\n" + character.name + ":"
 
-        if (fileManager.modelExists() && nativeBridge.isAvailable) {
+        if (fileManager.modelExists() && nativeBridge.isAvailable && nativeBridge.isNativeChatGenerationEnabled) {
             val nativeResult = nativeBridge.generate(fileManager.modelFile().absolutePath, prompt)
             if (nativeResult.ok) {
                 return nativeResult.text
@@ -31,6 +31,11 @@ class OnDeviceReplyClient(context: Context) : AiReplyClient {
         }
 
         val base = fallback.generateReply(character, history, userMessage)
-        return "$base\n\n[${nativeBridge.status()} ${fileManager.modelStatusMessage()}]"
+        val diagnostic = if (fileManager.modelExists()) {
+            nativeBridge.diagnostic(fileManager.modelFile().absolutePath).text
+        } else {
+            "${nativeBridge.status()} ${fileManager.modelStatusMessage()}"
+        }
+        return "$base\n\n[$diagnostic]"
     }
 }
