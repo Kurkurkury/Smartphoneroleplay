@@ -34,53 +34,25 @@ static std::string run_llama_generation(
         const std::string& prompt_text,
         int n_predict,
         int n_ctx_target) {
-    if (model_path.empty()) {
-        return "Fehler: Modellpfad ist leer.";
-    }
-    if (prompt_text.empty()) {
-        return "Fehler: Prompt ist leer.";
-    }
+    if (model_path.empty()) return "Fehler: Modellpfad ist leer.";
+    if (prompt_text.empty()) return "Fehler: Prompt ist leer.";
 
     ggml_backend_load_all();
-
     llama_model_params model_params = llama_model_default_params();
     model_params.n_gpu_layers = 0;
 
     llama_model* model = llama_model_load_from_file(model_path.c_str(), model_params);
-    if (model == nullptr) {
-        std::string error = "Fehler: GGUF-Modell konnte nicht geladen werden: ";
-        error += model_path;
-        return error;
-    }
+    if (model == nullptr) return "Fehler: GGUF-Modell konnte nicht geladen werden.";
 
     const llama_vocab* vocab = llama_model_get_vocab(model);
-
-    int n_prompt = -llama_tokenize(
-            vocab,
-            prompt_text.c_str(),
-            static_cast<int32_t>(prompt_text.size()),
-            nullptr,
-            0,
-            true,
-            true
-    );
-
+    int n_prompt = -llama_tokenize(vocab, prompt_text.c_str(), static_cast<int32_t>(prompt_text.size()), nullptr, 0, true, true);
     if (n_prompt <= 0) {
         llama_model_free(model);
         return "Fehler: Prompt konnte nicht tokenisiert werden.";
     }
 
     std::vector<llama_token> prompt_tokens(static_cast<size_t>(n_prompt));
-    int tokenized = llama_tokenize(
-            vocab,
-            prompt_text.c_str(),
-            static_cast<int32_t>(prompt_text.size()),
-            prompt_tokens.data(),
-            static_cast<int32_t>(prompt_tokens.size()),
-            true,
-            true
-    );
-
+    int tokenized = llama_tokenize(vocab, prompt_text.c_str(), static_cast<int32_t>(prompt_text.size()), prompt_tokens.data(), static_cast<int32_t>(prompt_tokens.size()), true, true);
     if (tokenized < 0) {
         llama_model_free(model);
         return "Fehler: Tokenisierung fehlgeschlagen.";
@@ -115,92 +87,61 @@ static std::string run_llama_generation(
     std::string output;
     for (int i = 0; i < n_predict; ++i) {
         llama_token next_token = llama_sampler_sample(sampler, ctx, -1);
-        if (llama_vocab_is_eog(vocab, next_token)) {
-            break;
-        }
-
+        if (llama_vocab_is_eog(vocab, next_token)) break;
         output += token_to_piece(vocab, next_token);
-
         llama_batch next_batch = llama_batch_get_one(&next_token, 1);
-        if (llama_decode(ctx, next_batch) != 0) {
-            output += "\n[Generierung abgebrochen: Decode-Fehler]";
-            break;
-        }
+        if (llama_decode(ctx, next_batch) != 0) break;
     }
 
     llama_sampler_free(sampler);
     llama_free(ctx);
     llama_model_free(model);
 
-    if (output.empty()) {
-        output = "Modell geladen, aber keine Ausgabe erzeugt.";
-    }
-
+    if (output.empty()) output = "Modell geladen, aber keine Ausgabe erzeugt.";
     return output;
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_kurkurkury_smartphoneroleplay_ai_NativeLlamaBridge_nativeStatus(
-        JNIEnv* env,
-        jobject /* this */) {
-    std::string status = "Native Laufzeit aktiv. llama.cpp ist verlinkt.";
+Java_com_kurkurkury_smartphoneroleplay_ai_NativeLlamaBridge_nativeStatus(JNIEnv* env, jobject) {
+    std::string status = "Engine aktiv: llama.cpp native ist verlinkt.";
     return env->NewStringUTF(status.c_str());
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_kurkurkury_smartphoneroleplay_ai_NativeLlamaBridge_nativeMiniInferenceDiagnostic(
-        JNIEnv* env,
-        jobject /* this */,
-        jstring modelPath) {
+Java_com_kurkurkury_smartphoneroleplay_ai_NativeLlamaBridge_nativeMiniInferenceDiagnostic(JNIEnv* env, jobject, jstring modelPath) {
     const std::string model_path = jstring_to_string(env, modelPath);
     std::ostringstream report;
-    report << "Mini-Inferenz Diagnose\n";
-    report << "1. Native Library: OK\n";
+    report << "Engine Diagnose\n";
+    report << "1. Engine: llama.cpp native OK\n";
+    report << "2. Dieser sichere Test laedt das Modell noch NICHT\n";
 
     if (model_path.empty()) {
-        report << "2. Modellpfad: FEHLER - leer";
+        report << "3. Modellpfad: FEHLER - leer";
         return env->NewStringUTF(report.str().c_str());
     }
 
     std::ifstream probe(model_path, std::ios::binary | std::ios::ate);
     if (!probe.good()) {
-        report << "2. Modellpfad: FEHLER - Datei nicht lesbar\n";
-        report << model_path;
+        report << "3. Modellpfad: FEHLER - Datei nicht lesbar";
         return env->NewStringUTF(report.str().c_str());
     }
 
     const auto size_bytes = probe.tellg();
-    report << "2. Modellpfad: OK\n";
-    report << "3. Dateigroesse: " << static_cast<long long>(size_bytes / 1024 / 1024) << " MB\n";
+    report << "3. Modellpfad: OK\n";
+    report << "4. Dateigroesse: " << static_cast<long long>(size_bytes / 1024 / 1024) << " MB\n";
 
     if (!has_gguf_magic(model_path)) {
-        report << "4. GGUF Header: FEHLER - Magic nicht GGUF";
+        report << "5. GGUF Header: FEHLER";
         return env->NewStringUTF(report.str().c_str());
     }
 
-    report << "4. GGUF Header: OK\n";
-    report << "5. Modell-Load/Kontext/Mini-Prompt: startet\n";
-
-    const std::string output = run_llama_generation(model_path, "Hello", 8, 256);
-    if (output.rfind("Fehler:", 0) == 0) {
-        report << "6. Mini-Inferenz: FEHLER\n";
-        report << output;
-    } else {
-        report << "6. Mini-Inferenz erfolgreich\n";
-        report << "Antwort:\n" << output;
-    }
-
+    report << "5. GGUF Header: OK\n";
+    report << "6. Naechster separater Schritt: Modell-Load-Test";
     return env->NewStringUTF(report.str().c_str());
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_kurkurkury_smartphoneroleplay_ai_NativeLlamaBridge_nativeGenerate(
-        JNIEnv* env,
-        jobject /* this */,
-        jstring modelPath,
-        jstring prompt) {
-    const std::string model_path = jstring_to_string(env, modelPath);
-    const std::string prompt_text = jstring_to_string(env, prompt);
-    const std::string output = run_llama_generation(model_path, prompt_text, 96, 512);
+Java_com_kurkurkury_smartphoneroleplay_ai_NativeLlamaBridge_nativeGenerate(JNIEnv* env, jobject, jstring modelPath, jstring prompt) {
+    const std::string output = run_llama_generation(jstring_to_string(env, modelPath), jstring_to_string(env, prompt), 96, 512);
     return env->NewStringUTF(output.c_str());
 }
