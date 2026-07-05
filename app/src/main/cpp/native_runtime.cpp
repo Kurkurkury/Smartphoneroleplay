@@ -29,11 +29,7 @@ static bool has_gguf_magic(const std::string& model_path) {
     return file.gcount() == 4 && magic[0] == 'G' && magic[1] == 'G' && magic[2] == 'U' && magic[3] == 'F';
 }
 
-static std::string run_llama_generation(
-        const std::string& model_path,
-        const std::string& prompt_text,
-        int n_predict,
-        int n_ctx_target) {
+static std::string run_llama_generation(const std::string& model_path, const std::string& prompt_text, int n_predict, int n_ctx_target) {
     if (model_path.empty()) return "Fehler: Modellpfad ist leer.";
     if (prompt_text.empty()) return "Fehler: Prompt ist leer.";
 
@@ -105,6 +101,44 @@ extern "C" JNIEXPORT jstring JNICALL
 Java_com_kurkurkury_smartphoneroleplay_ai_NativeLlamaBridge_nativeStatus(JNIEnv* env, jobject) {
     std::string status = "Engine aktiv: llama.cpp native ist verlinkt.";
     return env->NewStringUTF(status.c_str());
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_kurkurkury_smartphoneroleplay_ai_NativeLlamaBridge_nativeModelLoadDiagnostic(JNIEnv* env, jobject, jstring modelPath) {
+    const std::string model_path = jstring_to_string(env, modelPath);
+    std::ostringstream report;
+    report << "Modell-Load-Test\n";
+    report << "1. Engine: llama.cpp native OK\n";
+    report << "2. Kontext/Inferenz: NICHT aktiv\n";
+
+    if (model_path.empty()) {
+        report << "3. Modellpfad: FEHLER - leer";
+        return env->NewStringUTF(report.str().c_str());
+    }
+    if (!has_gguf_magic(model_path)) {
+        report << "3. GGUF Header: FEHLER";
+        return env->NewStringUTF(report.str().c_str());
+    }
+
+    report << "3. GGUF Header: OK\n";
+    report << "4. Modell-Load: startet\n";
+
+    ggml_backend_load_all();
+    llama_model_params model_params = llama_model_default_params();
+    model_params.n_gpu_layers = 0;
+
+    llama_model* model = llama_model_load_from_file(model_path.c_str(), model_params);
+    if (model == nullptr) {
+        report << "5. Modell-Load: FEHLER - nullptr";
+        return env->NewStringUTF(report.str().c_str());
+    }
+
+    report << "5. Modell-Load: OK\n";
+    report << "6. Modell wird sofort freigegeben\n";
+    llama_model_free(model);
+    report << "7. Modell-Free: OK\n";
+    report << "Naechster separater Schritt: Kontext-Test";
+    return env->NewStringUTF(report.str().c_str());
 }
 
 extern "C" JNIEXPORT jstring JNICALL
