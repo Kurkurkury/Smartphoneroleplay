@@ -1,7 +1,11 @@
 package com.kurkurkury.smartphoneroleplay.ai
 
+import java.io.File
+
 class NativeLlamaBridge {
     companion object {
+        private const val ENABLE_NATIVE_CHAT_GENERATION = false
+
         private val loadFailure: Throwable? = try {
             System.loadLibrary("smartphoneroleplay_native")
             null
@@ -12,6 +16,9 @@ class NativeLlamaBridge {
 
     val isAvailable: Boolean
         get() = loadFailure == null
+
+    val isNativeChatGenerationEnabled: Boolean
+        get() = ENABLE_NATIVE_CHAT_GENERATION
 
     fun status(): String {
         if (!isAvailable) {
@@ -25,7 +32,56 @@ class NativeLlamaBridge {
         }
     }
 
+    fun diagnostic(modelPath: String): NativeGenerationResult {
+        val modelFile = File(modelPath)
+        val lines = mutableListOf<String>()
+        lines += "Native Diagnose"
+        lines += "Library geladen: ${if (isAvailable) "JA" else "NEIN"}"
+        lines += "Native Status: ${status()}"
+        lines += "Modellpfad vorhanden: ${if (modelFile.exists()) "JA" else "NEIN"}"
+        lines += "Modellgroesse: ${if (modelFile.exists()) "${modelFile.length() / 1024 / 1024} MB" else "unbekannt"}"
+        lines += "Chat-Native-Modus: ${if (ENABLE_NATIVE_CHAT_GENERATION) "AKTIV" else "SICHER DEAKTIVIERT"}"
+        lines += "Hinweis: Normaler Chat bleibt Demo-Fallback. Der folgende Test laedt das Modell nur fuer eine kurze Diagnose."
+
+        if (isAvailable && modelFile.exists()) {
+            lines += ""
+            lines += miniInferenceDiagnostic(modelPath).text
+        }
+
+        return NativeGenerationResult(ok = isAvailable && modelFile.exists(), text = lines.joinToString("\n"))
+    }
+
+    fun miniInferenceDiagnostic(modelPath: String): NativeGenerationResult {
+        val modelFile = File(modelPath)
+        if (!isAvailable) {
+            return NativeGenerationResult(false, status())
+        }
+        if (!modelFile.exists()) {
+            return NativeGenerationResult(false, "Mini-Inferenz Diagnose\nFehler: Modellpfad existiert nicht.")
+        }
+
+        return try {
+            val text = nativeMiniInferenceDiagnostic(modelPath).trim()
+            NativeGenerationResult(
+                ok = text.contains("Mini-Inferenz erfolgreich"),
+                text = text.ifBlank { "Mini-Inferenz Diagnose\nFehler: Native Test lieferte keine Ausgabe." }
+            )
+        } catch (error: Throwable) {
+            NativeGenerationResult(
+                ok = false,
+                text = "Mini-Inferenz Diagnose\nFehler: ${error.message ?: error.javaClass.simpleName}."
+            )
+        }
+    }
+
     fun generate(modelPath: String, prompt: String): NativeGenerationResult {
+        if (!ENABLE_NATIVE_CHAT_GENERATION) {
+            return NativeGenerationResult(
+                ok = false,
+                text = "Native Chat-Generierung ist im Diagnose-Build sicher deaktiviert. Modell bleibt importiert; Demo-Fallback verhindert App-Absturz."
+            )
+        }
+
         if (!isAvailable) {
             return NativeGenerationResult(
                 ok = false,
@@ -49,6 +105,8 @@ class NativeLlamaBridge {
     }
 
     private external fun nativeStatus(): String
+
+    private external fun nativeMiniInferenceDiagnostic(modelPath: String): String
 
     private external fun nativeGenerate(modelPath: String, prompt: String): String
 }

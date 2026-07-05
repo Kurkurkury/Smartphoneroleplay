@@ -13,6 +13,7 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import com.kurkurkury.smartphoneroleplay.ai.NativeLlamaBridge
 import com.kurkurkury.smartphoneroleplay.ai.OnDeviceModelFileManager
 import com.kurkurkury.smartphoneroleplay.ai.OnDeviceReplyClient
 import com.kurkurkury.smartphoneroleplay.data.CharacterRepository
@@ -193,6 +194,11 @@ class MainActivity : Activity() {
             dp(58)
         ).apply { setMargins(0, dp(8), 0, 0) })
 
+        container.addView(actionButton("KI-Test", "Native Diagnose") { runNativeDiagnostic() }, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            dp(58)
+        ).apply { setMargins(0, dp(8), 0, 0) })
+
         return container
     }
 
@@ -251,6 +257,16 @@ class MainActivity : Activity() {
             type = "*/*"
         }
         startActivityForResult(intent, modelPickerRequestCode)
+    }
+
+    private fun runNativeDiagnostic() {
+        val bridge = NativeLlamaBridge()
+        val text = if (modelFileManager.modelExists()) {
+            bridge.diagnostic(modelFileManager.modelFile().absolutePath).text
+        } else {
+            "Native Diagnose\nLibrary/Status: ${bridge.status()}\nModellpfad vorhanden: NEIN\nBitte zuerst ein GGUF-Modell importieren."
+        }
+        addSystemMessage(text)
     }
 
     private fun actionButton(label: String, caption: String, onClick: () -> Unit): LinearLayout {
