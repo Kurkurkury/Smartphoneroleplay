@@ -24,10 +24,7 @@ class NativeLlamaBridge {
         if (!isAvailable) {
             return "Native KI ist nicht aktiv: ${loadFailure?.javaClass?.simpleName ?: "Bibliothek fehlt"}. Demo-Modus laeuft stabil."
         }
-
-        return try {
-            nativeStatus()
-        } catch (error: Throwable) {
+        return try { nativeStatus() } catch (error: Throwable) {
             "Native KI konnte nicht abgefragt werden: ${error.message ?: error.javaClass.simpleName}. Demo-Modus bleibt aktiv."
         }
     }
@@ -41,73 +38,60 @@ class NativeLlamaBridge {
         lines += "Modellpfad vorhanden: ${if (modelFile.exists()) "JA" else "NEIN"}"
         lines += "Modellgroesse: ${if (modelFile.exists()) "${modelFile.length() / 1024 / 1024} MB" else "unbekannt"}"
         lines += "Chat-Native-Modus: ${if (ENABLE_NATIVE_CHAT_GENERATION) "AKTIV" else "SICHER DEAKTIVIERT"}"
-        lines += "Hinweis: Normaler Chat bleibt Demo-Fallback. Der folgende Test laedt das Modell nur fuer eine kurze Diagnose."
-
+        lines += "Hinweis: Normaler Chat bleibt Demo-Fallback. Dieser Test prueft Engine/Datei/Header ohne Chat-Inferenz."
         if (isAvailable && modelFile.exists()) {
             lines += ""
             lines += miniInferenceDiagnostic(modelPath).text
         }
-
         return NativeGenerationResult(ok = isAvailable && modelFile.exists(), text = lines.joinToString("\n"))
+    }
+
+    fun modelLoadDiagnostic(modelPath: String): NativeGenerationResult {
+        val modelFile = File(modelPath)
+        if (!isAvailable) return NativeGenerationResult(false, status())
+        if (!modelFile.exists()) return NativeGenerationResult(false, "Modell-Load-Test\nFehler: Modellpfad existiert nicht.")
+        return try {
+            val text = nativeModelLoadDiagnostic(modelPath).trim()
+            NativeGenerationResult(
+                ok = text.contains("Modell-Load: OK"),
+                text = text.ifBlank { "Modell-Load-Test\nFehler: Native Test lieferte keine Ausgabe." }
+            )
+        } catch (error: Throwable) {
+            NativeGenerationResult(false, "Modell-Load-Test\nFehler: ${error.message ?: error.javaClass.simpleName}.")
+        }
     }
 
     fun miniInferenceDiagnostic(modelPath: String): NativeGenerationResult {
         val modelFile = File(modelPath)
-        if (!isAvailable) {
-            return NativeGenerationResult(false, status())
-        }
-        if (!modelFile.exists()) {
-            return NativeGenerationResult(false, "Mini-Inferenz Diagnose\nFehler: Modellpfad existiert nicht.")
-        }
-
+        if (!isAvailable) return NativeGenerationResult(false, status())
+        if (!modelFile.exists()) return NativeGenerationResult(false, "Engine Diagnose\nFehler: Modellpfad existiert nicht.")
         return try {
             val text = nativeMiniInferenceDiagnostic(modelPath).trim()
             NativeGenerationResult(
-                ok = text.contains("Mini-Inferenz erfolgreich"),
-                text = text.ifBlank { "Mini-Inferenz Diagnose\nFehler: Native Test lieferte keine Ausgabe." }
+                ok = text.contains("GGUF Header: OK"),
+                text = text.ifBlank { "Engine Diagnose\nFehler: Native Test lieferte keine Ausgabe." }
             )
         } catch (error: Throwable) {
-            NativeGenerationResult(
-                ok = false,
-                text = "Mini-Inferenz Diagnose\nFehler: ${error.message ?: error.javaClass.simpleName}."
-            )
+            NativeGenerationResult(false, "Engine Diagnose\nFehler: ${error.message ?: error.javaClass.simpleName}.")
         }
     }
 
     fun generate(modelPath: String, prompt: String): NativeGenerationResult {
         if (!ENABLE_NATIVE_CHAT_GENERATION) {
-            return NativeGenerationResult(
-                ok = false,
-                text = "Native Chat-Generierung ist im Diagnose-Build sicher deaktiviert. Modell bleibt importiert; Demo-Fallback verhindert App-Absturz."
-            )
+            return NativeGenerationResult(false, "Native Chat-Generierung ist im Diagnose-Build sicher deaktiviert. Modell bleibt importiert; Demo-Fallback verhindert App-Absturz.")
         }
-
-        if (!isAvailable) {
-            return NativeGenerationResult(
-                ok = false,
-                text = status()
-            )
-        }
-
+        if (!isAvailable) return NativeGenerationResult(false, status())
         return try {
             val text = nativeGenerate(modelPath, prompt).trim()
-            if (text.isBlank() || text.startsWith("Fehler:")) {
-                NativeGenerationResult(false, text.ifBlank { "Native KI hat keine Ausgabe erzeugt." })
-            } else {
-                NativeGenerationResult(true, text)
-            }
+            if (text.isBlank() || text.startsWith("Fehler:")) NativeGenerationResult(false, text.ifBlank { "Native KI hat keine Ausgabe erzeugt." }) else NativeGenerationResult(true, text)
         } catch (error: Throwable) {
-            NativeGenerationResult(
-                ok = false,
-                text = "Native KI-Generierung fehlgeschlagen: ${error.message ?: error.javaClass.simpleName}."
-            )
+            NativeGenerationResult(false, "Native KI-Generierung fehlgeschlagen: ${error.message ?: error.javaClass.simpleName}.")
         }
     }
 
     private external fun nativeStatus(): String
-
+    private external fun nativeModelLoadDiagnostic(modelPath: String): String
     private external fun nativeMiniInferenceDiagnostic(modelPath: String): String
-
     private external fun nativeGenerate(modelPath: String, prompt: String): String
 }
 
