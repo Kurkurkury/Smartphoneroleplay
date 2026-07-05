@@ -38,10 +38,12 @@ class NativeLlamaBridge {
         lines += "Modellpfad vorhanden: ${if (modelFile.exists()) "JA" else "NEIN"}"
         lines += "Modellgroesse: ${if (modelFile.exists()) "${modelFile.length() / 1024 / 1024} MB" else "unbekannt"}"
         lines += "Chat-Native-Modus: ${if (ENABLE_NATIVE_CHAT_GENERATION) "AKTIV" else "SICHER DEAKTIVIERT"}"
-        lines += "Hinweis: Normaler Chat bleibt Demo-Fallback. Dieser Test prueft Engine/Datei/Header ohne Chat-Inferenz."
+        lines += "Hinweis: Normaler Chat bleibt Demo-Fallback. Dieser Test laedt das Modell, erstellt aber keinen Kontext und keine Inferenz."
         if (isAvailable && modelFile.exists()) {
             lines += ""
             lines += miniInferenceDiagnostic(modelPath).text
+            lines += ""
+            lines += modelLoadDiagnostic(modelPath).text
         }
         return NativeGenerationResult(ok = isAvailable && modelFile.exists(), text = lines.joinToString("\n"))
     }
