@@ -38,14 +38,31 @@ class NativeLlamaBridge {
         lines += "Modellpfad vorhanden: ${if (modelFile.exists()) "JA" else "NEIN"}"
         lines += "Modellgroesse: ${if (modelFile.exists()) "${modelFile.length() / 1024 / 1024} MB" else "unbekannt"}"
         lines += "Chat-Native-Modus: ${if (ENABLE_NATIVE_CHAT_GENERATION) "AKTIV" else "SICHER DEAKTIVIERT"}"
-        lines += "Hinweis: Normaler Chat bleibt Demo-Fallback. Dieser Test laedt das Modell, erstellt aber keinen Kontext und keine Inferenz."
+        lines += "Hinweis: Normaler Chat bleibt Demo-Fallback. Dieser Test erstellt einen kleinen Kontext, aber noch keine Inferenz."
         if (isAvailable && modelFile.exists()) {
             lines += ""
             lines += miniInferenceDiagnostic(modelPath).text
             lines += ""
             lines += modelLoadDiagnostic(modelPath).text
+            lines += ""
+            lines += contextDiagnostic(modelPath).text
         }
         return NativeGenerationResult(ok = isAvailable && modelFile.exists(), text = lines.joinToString("\n"))
+    }
+
+    fun contextDiagnostic(modelPath: String): NativeGenerationResult {
+        val modelFile = File(modelPath)
+        if (!isAvailable) return NativeGenerationResult(false, status())
+        if (!modelFile.exists()) return NativeGenerationResult(false, "Kontext-Test\nFehler: Modellpfad existiert nicht.")
+        return try {
+            val text = nativeContextDiagnostic(modelPath).trim()
+            NativeGenerationResult(
+                ok = text.contains("Kontext-Erstellung: OK"),
+                text = text.ifBlank { "Kontext-Test\nFehler: Native Test lieferte keine Ausgabe." }
+            )
+        } catch (error: Throwable) {
+            NativeGenerationResult(false, "Kontext-Test\nFehler: ${error.message ?: error.javaClass.simpleName}.")
+        }
     }
 
     fun modelLoadDiagnostic(modelPath: String): NativeGenerationResult {
@@ -92,6 +109,7 @@ class NativeLlamaBridge {
     }
 
     private external fun nativeStatus(): String
+    private external fun nativeContextDiagnostic(modelPath: String): String
     private external fun nativeModelLoadDiagnostic(modelPath: String): String
     private external fun nativeMiniInferenceDiagnostic(modelPath: String): String
     private external fun nativeGenerate(modelPath: String, prompt: String): String
