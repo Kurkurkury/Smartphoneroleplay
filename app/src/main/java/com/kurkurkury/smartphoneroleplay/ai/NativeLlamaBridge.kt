@@ -38,14 +38,14 @@ class NativeLlamaBridge {
         lines += "Modellpfad vorhanden: ${if (modelFile.exists()) "JA" else "NEIN"}"
         lines += "Modellgroesse: ${if (modelFile.exists()) "${modelFile.length() / 1024 / 1024} MB" else "unbekannt"}"
         lines += "Chat-Native-Modus: ${if (ENABLE_NATIVE_CHAT_GENERATION) "AKTIV" else "SICHER DEAKTIVIERT"}"
-        lines += "Hinweis: Normaler Chat bleibt Demo-Fallback. Dieser Test erzeugt nur wenige Tokens."
+        lines += "Hinweis: Normaler Chat bleibt Demo-Fallback. Dieser Test tokenisiert nur; kein Decode, kein Sampling."
         if (isAvailable && modelFile.exists()) {
             lines += ""
             lines += modelLoadDiagnostic(modelPath).text
             lines += ""
             lines += contextDiagnostic(modelPath).text
             lines += ""
-            lines += miniInferenceDiagnostic(modelPath).text
+            lines += tokenizeDiagnostic(modelPath).text
         }
         return NativeGenerationResult(ok = isAvailable && modelFile.exists(), text = lines.joinToString("\n"))
     }
@@ -80,18 +80,18 @@ class NativeLlamaBridge {
         }
     }
 
-    fun miniInferenceDiagnostic(modelPath: String): NativeGenerationResult {
+    fun tokenizeDiagnostic(modelPath: String): NativeGenerationResult {
         val modelFile = File(modelPath)
         if (!isAvailable) return NativeGenerationResult(false, status())
-        if (!modelFile.exists()) return NativeGenerationResult(false, "Mini-Inferenz-Test\nFehler: Modellpfad existiert nicht.")
+        if (!modelFile.exists()) return NativeGenerationResult(false, "Tokenisierung-Test\nFehler: Modellpfad existiert nicht.")
         return try {
             val text = nativeMiniInferenceDiagnostic(modelPath).trim()
             NativeGenerationResult(
-                ok = text.contains("Mini-Inferenz: OK"),
-                text = text.ifBlank { "Mini-Inferenz-Test\nFehler: Native Test lieferte keine Ausgabe." }
+                ok = text.contains("Tokenisierung: OK"),
+                text = text.ifBlank { "Tokenisierung-Test\nFehler: Native Test lieferte keine Ausgabe." }
             )
         } catch (error: Throwable) {
-            NativeGenerationResult(false, "Mini-Inferenz-Test\nFehler: ${error.message ?: error.javaClass.simpleName}.")
+            NativeGenerationResult(false, "Tokenisierung-Test\nFehler: ${error.message ?: error.javaClass.simpleName}.")
         }
     }
 

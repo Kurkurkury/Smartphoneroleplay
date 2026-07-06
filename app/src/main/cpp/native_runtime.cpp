@@ -159,7 +159,7 @@ Java_com_kurkurkury_smartphoneroleplay_ai_NativeLlamaBridge_nativeContextDiagnos
     report << "9. Kontext-Free: OK\n";
     llama_model_free(model);
     report << "10. Modell-Free: OK\n";
-    report << "Naechster separater Schritt: Mini-Inferenz";
+    report << "Naechster separater Schritt: Tokenisierung";
     return env->NewStringUTF(report.str().c_str());
 }
 
@@ -167,21 +167,33 @@ extern "C" JNIEXPORT jstring JNICALL
 Java_com_kurkurkury_smartphoneroleplay_ai_NativeLlamaBridge_nativeMiniInferenceDiagnostic(JNIEnv* env, jobject, jstring modelPath) {
     const std::string model_path = jstring_to_string(env, modelPath);
     std::ostringstream report;
-    report << "Mini-Inferenz-Test\n";
+    report << "Tokenisierung-Test\n";
     report << "1. Engine: llama.cpp native OK\n";
     report << "2. Prompt: Hello\n";
-    if (model_path.empty()) { report << "3. Modellpfad: FEHLER - leer"; return env->NewStringUTF(report.str().c_str()); }
-    if (!has_gguf_magic(model_path)) { report << "3. GGUF Header: FEHLER"; return env->NewStringUTF(report.str().c_str()); }
-    report << "3. GGUF Header: OK\n";
-    report << "4. Modell/Kontext/Token-Test: startet\n";
-    const std::string output = run_llama_generation(model_path, "Hello", 8, 256);
-    if (output.rfind("Fehler:", 0) == 0) {
-        report << "5. Mini-Inferenz: FEHLER\n";
-        report << output;
-    } else {
-        report << "5. Mini-Inferenz: OK\n";
-        report << "6. Antwort:\n" << output;
-    }
+    report << "3. Decode/Sampling: NICHT aktiv\n";
+    if (model_path.empty()) { report << "4. Modellpfad: FEHLER - leer"; return env->NewStringUTF(report.str().c_str()); }
+    if (!has_gguf_magic(model_path)) { report << "4. GGUF Header: FEHLER"; return env->NewStringUTF(report.str().c_str()); }
+    report << "4. GGUF Header: OK\n";
+    report << "5. Modell-Load: startet\n";
+    ggml_backend_load_all();
+    llama_model_params model_params = llama_model_default_params();
+    model_params.n_gpu_layers = 0;
+    llama_model* model = llama_model_load_from_file(model_path.c_str(), model_params);
+    if (model == nullptr) { report << "6. Modell-Load: FEHLER - nullptr"; return env->NewStringUTF(report.str().c_str()); }
+    report << "6. Modell-Load: OK\n";
+    const llama_vocab* vocab = llama_model_get_vocab(model);
+    const std::string prompt = "Hello";
+    int n_prompt = -llama_tokenize(vocab, prompt.c_str(), static_cast<int32_t>(prompt.size()), nullptr, 0, true, true);
+    if (n_prompt <= 0) { llama_model_free(model); report << "7. Tokenisierung: FEHLER - Laenge"; return env->NewStringUTF(report.str().c_str()); }
+    std::vector<llama_token> tokens(static_cast<size_t>(n_prompt));
+    int tokenized = llama_tokenize(vocab, prompt.c_str(), static_cast<int32_t>(prompt.size()), tokens.data(), static_cast<int32_t>(tokens.size()), true, true);
+    if (tokenized < 0) { llama_model_free(model); report << "7. Tokenisierung: FEHLER"; return env->NewStringUTF(report.str().c_str()); }
+    report << "7. Tokenisierung: OK\n";
+    report << "8. Token-Anzahl: " << tokenized << "\n";
+    report << "9. Modell wird freigegeben\n";
+    llama_model_free(model);
+    report << "10. Modell-Free: OK\n";
+    report << "Naechster separater Schritt: Decode-Test";
     return env->NewStringUTF(report.str().c_str());
 }
 
