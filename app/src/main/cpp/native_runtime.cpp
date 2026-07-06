@@ -110,29 +110,15 @@ Java_com_kurkurkury_smartphoneroleplay_ai_NativeLlamaBridge_nativeModelLoadDiagn
     report << "Modell-Load-Test\n";
     report << "1. Engine: llama.cpp native OK\n";
     report << "2. Kontext/Inferenz: NICHT aktiv\n";
-
-    if (model_path.empty()) {
-        report << "3. Modellpfad: FEHLER - leer";
-        return env->NewStringUTF(report.str().c_str());
-    }
-    if (!has_gguf_magic(model_path)) {
-        report << "3. GGUF Header: FEHLER";
-        return env->NewStringUTF(report.str().c_str());
-    }
-
+    if (model_path.empty()) { report << "3. Modellpfad: FEHLER - leer"; return env->NewStringUTF(report.str().c_str()); }
+    if (!has_gguf_magic(model_path)) { report << "3. GGUF Header: FEHLER"; return env->NewStringUTF(report.str().c_str()); }
     report << "3. GGUF Header: OK\n";
     report << "4. Modell-Load: startet\n";
-
     ggml_backend_load_all();
     llama_model_params model_params = llama_model_default_params();
     model_params.n_gpu_layers = 0;
-
     llama_model* model = llama_model_load_from_file(model_path.c_str(), model_params);
-    if (model == nullptr) {
-        report << "5. Modell-Load: FEHLER - nullptr";
-        return env->NewStringUTF(report.str().c_str());
-    }
-
+    if (model == nullptr) { report << "5. Modell-Load: FEHLER - nullptr"; return env->NewStringUTF(report.str().c_str()); }
     report << "5. Modell-Load: OK\n";
     report << "6. Modell wird sofort freigegeben\n";
     llama_model_free(model);
@@ -148,45 +134,25 @@ Java_com_kurkurkury_smartphoneroleplay_ai_NativeLlamaBridge_nativeContextDiagnos
     report << "Kontext-Test\n";
     report << "1. Engine: llama.cpp native OK\n";
     report << "2. Inferenz: NICHT aktiv\n";
-
-    if (model_path.empty()) {
-        report << "3. Modellpfad: FEHLER - leer";
-        return env->NewStringUTF(report.str().c_str());
-    }
-    if (!has_gguf_magic(model_path)) {
-        report << "3. GGUF Header: FEHLER";
-        return env->NewStringUTF(report.str().c_str());
-    }
-
+    if (model_path.empty()) { report << "3. Modellpfad: FEHLER - leer"; return env->NewStringUTF(report.str().c_str()); }
+    if (!has_gguf_magic(model_path)) { report << "3. GGUF Header: FEHLER"; return env->NewStringUTF(report.str().c_str()); }
     report << "3. GGUF Header: OK\n";
     report << "4. Modell-Load: startet\n";
-
     ggml_backend_load_all();
     llama_model_params model_params = llama_model_default_params();
     model_params.n_gpu_layers = 0;
     llama_model* model = llama_model_load_from_file(model_path.c_str(), model_params);
-    if (model == nullptr) {
-        report << "5. Modell-Load: FEHLER - nullptr";
-        return env->NewStringUTF(report.str().c_str());
-    }
-
+    if (model == nullptr) { report << "5. Modell-Load: FEHLER - nullptr"; return env->NewStringUTF(report.str().c_str()); }
     report << "5. Modell-Load: OK\n";
     report << "6. Kontext-Erstellung: startet\n";
-
     llama_context_params ctx_params = llama_context_default_params();
     ctx_params.n_ctx = 256;
     ctx_params.n_batch = 64;
     ctx_params.n_threads = 2;
     ctx_params.n_threads_batch = 2;
     ctx_params.no_perf = true;
-
     llama_context* ctx = llama_init_from_model(model, ctx_params);
-    if (ctx == nullptr) {
-        llama_model_free(model);
-        report << "7. Kontext-Erstellung: FEHLER - nullptr";
-        return env->NewStringUTF(report.str().c_str());
-    }
-
+    if (ctx == nullptr) { llama_model_free(model); report << "7. Kontext-Erstellung: FEHLER - nullptr"; return env->NewStringUTF(report.str().c_str()); }
     report << "7. Kontext-Erstellung: OK\n";
     report << "8. Kontext wird sofort freigegeben\n";
     llama_free(ctx);
@@ -201,32 +167,21 @@ extern "C" JNIEXPORT jstring JNICALL
 Java_com_kurkurkury_smartphoneroleplay_ai_NativeLlamaBridge_nativeMiniInferenceDiagnostic(JNIEnv* env, jobject, jstring modelPath) {
     const std::string model_path = jstring_to_string(env, modelPath);
     std::ostringstream report;
-    report << "Engine Diagnose\n";
+    report << "Mini-Inferenz-Test\n";
     report << "1. Engine: llama.cpp native OK\n";
-    report << "2. Dieser sichere Test laedt das Modell noch NICHT\n";
-
-    if (model_path.empty()) {
-        report << "3. Modellpfad: FEHLER - leer";
-        return env->NewStringUTF(report.str().c_str());
+    report << "2. Prompt: Hello\n";
+    if (model_path.empty()) { report << "3. Modellpfad: FEHLER - leer"; return env->NewStringUTF(report.str().c_str()); }
+    if (!has_gguf_magic(model_path)) { report << "3. GGUF Header: FEHLER"; return env->NewStringUTF(report.str().c_str()); }
+    report << "3. GGUF Header: OK\n";
+    report << "4. Modell/Kontext/Token-Test: startet\n";
+    const std::string output = run_llama_generation(model_path, "Hello", 8, 256);
+    if (output.rfind("Fehler:", 0) == 0) {
+        report << "5. Mini-Inferenz: FEHLER\n";
+        report << output;
+    } else {
+        report << "5. Mini-Inferenz: OK\n";
+        report << "6. Antwort:\n" << output;
     }
-
-    std::ifstream probe(model_path, std::ios::binary | std::ios::ate);
-    if (!probe.good()) {
-        report << "3. Modellpfad: FEHLER - Datei nicht lesbar";
-        return env->NewStringUTF(report.str().c_str());
-    }
-
-    const auto size_bytes = probe.tellg();
-    report << "3. Modellpfad: OK\n";
-    report << "4. Dateigroesse: " << static_cast<long long>(size_bytes / 1024 / 1024) << " MB\n";
-
-    if (!has_gguf_magic(model_path)) {
-        report << "5. GGUF Header: FEHLER";
-        return env->NewStringUTF(report.str().c_str());
-    }
-
-    report << "5. GGUF Header: OK\n";
-    report << "6. Naechster separater Schritt: Modell-Load-Test";
     return env->NewStringUTF(report.str().c_str());
 }
 
