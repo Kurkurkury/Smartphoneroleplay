@@ -42,17 +42,11 @@ static std::string run_llama_generation(const std::string& model_path, const std
 
     const llama_vocab* vocab = llama_model_get_vocab(model);
     int n_prompt = -llama_tokenize(vocab, prompt_text.c_str(), static_cast<int32_t>(prompt_text.size()), nullptr, 0, true, true);
-    if (n_prompt <= 0) {
-        llama_model_free(model);
-        return "Fehler: Prompt konnte nicht tokenisiert werden.";
-    }
+    if (n_prompt <= 0) { llama_model_free(model); return "Fehler: Prompt konnte nicht tokenisiert werden."; }
 
     std::vector<llama_token> prompt_tokens(static_cast<size_t>(n_prompt));
     int tokenized = llama_tokenize(vocab, prompt_text.c_str(), static_cast<int32_t>(prompt_text.size()), prompt_tokens.data(), static_cast<int32_t>(prompt_tokens.size()), true, true);
-    if (tokenized < 0) {
-        llama_model_free(model);
-        return "Fehler: Tokenisierung fehlgeschlagen.";
-    }
+    if (tokenized < 0) { llama_model_free(model); return "Fehler: Tokenisierung fehlgeschlagen."; }
 
     llama_context_params ctx_params = llama_context_default_params();
     ctx_params.n_ctx = std::max(n_ctx_target, tokenized + n_predict + 16);
@@ -62,15 +56,10 @@ static std::string run_llama_generation(const std::string& model_path, const std
     ctx_params.no_perf = true;
 
     llama_context* ctx = llama_init_from_model(model, ctx_params);
-    if (ctx == nullptr) {
-        llama_model_free(model);
-        return "Fehler: Kontext konnte nicht erstellt werden.";
-    }
+    if (ctx == nullptr) { llama_model_free(model); return "Fehler: Kontext konnte nicht erstellt werden."; }
 
     llama_sampler* sampler = llama_sampler_chain_init(llama_sampler_chain_default_params());
-    llama_sampler_chain_add(sampler, llama_sampler_init_top_p(0.90f, 1));
-    llama_sampler_chain_add(sampler, llama_sampler_init_temp(0.70f));
-    llama_sampler_chain_add(sampler, llama_sampler_init_dist(1234));
+    llama_sampler_chain_add(sampler, llama_sampler_init_greedy());
 
     llama_batch batch = llama_batch_get_one(prompt_tokens.data(), tokenized);
     if (llama_decode(ctx, batch) != 0) {
@@ -92,7 +81,6 @@ static std::string run_llama_generation(const std::string& model_path, const std
     llama_sampler_free(sampler);
     llama_free(ctx);
     llama_model_free(model);
-
     if (output.empty()) output = "Modell geladen, aber keine Ausgabe erzeugt.";
     return output;
 }
@@ -159,7 +147,7 @@ Java_com_kurkurkury_smartphoneroleplay_ai_NativeLlamaBridge_nativeContextDiagnos
     report << "9. Kontext-Free: OK\n";
     llama_model_free(model);
     report << "10. Modell-Free: OK\n";
-    report << "Naechster separater Schritt: Tokenisierung";
+    report << "Naechster separater Schritt: Decode-Test";
     return env->NewStringUTF(report.str().c_str());
 }
 
@@ -167,10 +155,10 @@ extern "C" JNIEXPORT jstring JNICALL
 Java_com_kurkurkury_smartphoneroleplay_ai_NativeLlamaBridge_nativeMiniInferenceDiagnostic(JNIEnv* env, jobject, jstring modelPath) {
     const std::string model_path = jstring_to_string(env, modelPath);
     std::ostringstream report;
-    report << "Tokenisierung-Test\n";
+    report << "Decode-Erstes-Token-Test\n";
     report << "1. Engine: llama.cpp native OK\n";
     report << "2. Prompt: Hello\n";
-    report << "3. Decode/Sampling: NICHT aktiv\n";
+    report << "3. Sampling: greedy, 1 Token\n";
     if (model_path.empty()) { report << "4. Modellpfad: FEHLER - leer"; return env->NewStringUTF(report.str().c_str()); }
     if (!has_gguf_magic(model_path)) { report << "4. GGUF Header: FEHLER"; return env->NewStringUTF(report.str().c_str()); }
     report << "4. GGUF Header: OK\n";
@@ -181,6 +169,7 @@ Java_com_kurkurkury_smartphoneroleplay_ai_NativeLlamaBridge_nativeMiniInferenceD
     llama_model* model = llama_model_load_from_file(model_path.c_str(), model_params);
     if (model == nullptr) { report << "6. Modell-Load: FEHLER - nullptr"; return env->NewStringUTF(report.str().c_str()); }
     report << "6. Modell-Load: OK\n";
+
     const llama_vocab* vocab = llama_model_get_vocab(model);
     const std::string prompt = "Hello";
     int n_prompt = -llama_tokenize(vocab, prompt.c_str(), static_cast<int32_t>(prompt.size()), nullptr, 0, true, true);
@@ -190,10 +179,41 @@ Java_com_kurkurkury_smartphoneroleplay_ai_NativeLlamaBridge_nativeMiniInferenceD
     if (tokenized < 0) { llama_model_free(model); report << "7. Tokenisierung: FEHLER"; return env->NewStringUTF(report.str().c_str()); }
     report << "7. Tokenisierung: OK\n";
     report << "8. Token-Anzahl: " << tokenized << "\n";
-    report << "9. Modell wird freigegeben\n";
+
+    llama_context_params ctx_params = llama_context_default_params();
+    ctx_params.n_ctx = 256;
+    ctx_params.n_batch = 64;
+    ctx_params.n_threads = 2;
+    ctx_params.n_threads_batch = 2;
+    ctx_params.no_perf = true;
+    llama_context* ctx = llama_init_from_model(model, ctx_params);
+    if (ctx == nullptr) { llama_model_free(model); report << "9. Kontext-Erstellung: FEHLER - nullptr"; return env->NewStringUTF(report.str().c_str()); }
+    report << "9. Kontext-Erstellung: OK\n";
+
+    report << "10. Decode Prompt: startet\n";
+    llama_batch batch = llama_batch_get_one(tokens.data(), tokenized);
+    int decode_result = llama_decode(ctx, batch);
+    if (decode_result != 0) {
+        llama_free(ctx);
+        llama_model_free(model);
+        report << "11. Decode Prompt: FEHLER - code " << decode_result;
+        return env->NewStringUTF(report.str().c_str());
+    }
+    report << "11. Decode Prompt: OK\n";
+
+    llama_sampler* sampler = llama_sampler_chain_init(llama_sampler_chain_default_params());
+    llama_sampler_chain_add(sampler, llama_sampler_init_greedy());
+    llama_token first_token = llama_sampler_sample(sampler, ctx, -1);
+    std::string piece = token_to_piece(vocab, first_token);
+    report << "12. Erstes Token: OK\n";
+    report << "13. Token-ID: " << first_token << "\n";
+    report << "14. Text: " << (piece.empty() ? "<leer>" : piece) << "\n";
+    report << "15. Aufraeumen: startet\n";
+    llama_sampler_free(sampler);
+    llama_free(ctx);
     llama_model_free(model);
-    report << "10. Modell-Free: OK\n";
-    report << "Naechster separater Schritt: Decode-Test";
+    report << "16. Aufraeumen: OK\n";
+    report << "Naechster separater Schritt: Mehr-Token-Generierung";
     return env->NewStringUTF(report.str().c_str());
 }
 
