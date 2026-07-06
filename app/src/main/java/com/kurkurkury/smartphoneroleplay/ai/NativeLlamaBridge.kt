@@ -38,14 +38,14 @@ class NativeLlamaBridge {
         lines += "Modellpfad vorhanden: ${if (modelFile.exists()) "JA" else "NEIN"}"
         lines += "Modellgroesse: ${if (modelFile.exists()) "${modelFile.length() / 1024 / 1024} MB" else "unbekannt"}"
         lines += "Chat-Native-Modus: ${if (ENABLE_NATIVE_CHAT_GENERATION) "AKTIV" else "SICHER DEAKTIVIERT"}"
-        lines += "Hinweis: Normaler Chat bleibt Demo-Fallback. Dieser Test prueft Decode und ein erstes Token."
+        lines += "Hinweis: Normaler Chat bleibt Demo-Fallback. Dieser Test erzeugt bis zu 32 Tokens."
         if (isAvailable && modelFile.exists()) {
             lines += ""
             lines += modelLoadDiagnostic(modelPath).text
             lines += ""
             lines += contextDiagnostic(modelPath).text
             lines += ""
-            lines += decodeFirstTokenDiagnostic(modelPath).text
+            lines += multiTokenDiagnostic(modelPath).text
         }
         return NativeGenerationResult(ok = isAvailable && modelFile.exists(), text = lines.joinToString("\n"))
     }
@@ -80,18 +80,18 @@ class NativeLlamaBridge {
         }
     }
 
-    fun decodeFirstTokenDiagnostic(modelPath: String): NativeGenerationResult {
+    fun multiTokenDiagnostic(modelPath: String): NativeGenerationResult {
         val modelFile = File(modelPath)
         if (!isAvailable) return NativeGenerationResult(false, status())
-        if (!modelFile.exists()) return NativeGenerationResult(false, "Decode-Test\nFehler: Modellpfad existiert nicht.")
+        if (!modelFile.exists()) return NativeGenerationResult(false, "Mehr-Token-Test\nFehler: Modellpfad existiert nicht.")
         return try {
             val text = nativeMiniInferenceDiagnostic(modelPath).trim()
             NativeGenerationResult(
-                ok = text.contains("Erstes Token: OK"),
-                text = text.ifBlank { "Decode-Test\nFehler: Native Test lieferte keine Ausgabe." }
+                ok = text.contains("Mehr-Token-Generierung: OK"),
+                text = text.ifBlank { "Mehr-Token-Test\nFehler: Native Test lieferte keine Ausgabe." }
             )
         } catch (error: Throwable) {
-            NativeGenerationResult(false, "Decode-Test\nFehler: ${error.message ?: error.javaClass.simpleName}.")
+            NativeGenerationResult(false, "Mehr-Token-Test\nFehler: ${error.message ?: error.javaClass.simpleName}.")
         }
     }
 
