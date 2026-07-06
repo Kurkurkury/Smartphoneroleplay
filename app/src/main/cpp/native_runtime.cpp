@@ -1,241 +1,148 @@
 #include <jni.h>
 #include <string>
 #include <vector>
-#include <algorithm>
 #include <fstream>
 #include <sstream>
 #include "llama.h"
 
-static std::string jstring_to_string(JNIEnv* env, jstring value) {
-    if (value == nullptr) return "";
-    const char* chars = env->GetStringUTFChars(value, nullptr);
-    std::string result(chars == nullptr ? "" : chars);
-    if (chars != nullptr) env->ReleaseStringUTFChars(value, chars);
-    return result;
+static std::string js(JNIEnv* env, jstring v) {
+    if (!v) return "";
+    const char* c = env->GetStringUTFChars(v, nullptr);
+    std::string r(c ? c : "");
+    if (c) env->ReleaseStringUTFChars(v, c);
+    return r;
 }
 
-static std::string token_to_piece(const llama_vocab* vocab, llama_token token) {
-    char buffer[256];
-    int length = llama_token_to_piece(vocab, token, buffer, sizeof(buffer), 0, true);
-    if (length < 0) return "";
-    return std::string(buffer, length);
+static bool gguf(const std::string& p) {
+    std::ifstream f(p, std::ios::binary);
+    char m[4] = {0,0,0,0};
+    f.read(m, 4);
+    return f.gcount() == 4 && m[0] == 'G' && m[1] == 'G' && m[2] == 'U' && m[3] == 'F';
 }
 
-static bool has_gguf_magic(const std::string& model_path) {
-    std::ifstream file(model_path, std::ios::binary);
-    if (!file.good()) return false;
-    char magic[4] = {0, 0, 0, 0};
-    file.read(magic, 4);
-    return file.gcount() == 4 && magic[0] == 'G' && magic[1] == 'G' && magic[2] == 'U' && magic[3] == 'F';
+static std::string piece(const llama_vocab* vocab, llama_token tok) {
+    char b[256];
+    int n = llama_token_to_piece(vocab, tok, b, sizeof(b), 0, true);
+    return n > 0 ? std::string(b, n) : std::string("<leer>");
 }
 
-static std::string run_llama_generation(const std::string& model_path, const std::string& prompt_text, int n_predict, int n_ctx_target) {
+static llama_batch one_token_batch(llama_token tok, int32_t pos, bool logits) {
+    llama_batch b = llama_batch_init(1, 0, 1);
+    b.n_tokens = 1;
+    b.token[0] = tok;
+    b.pos[0] = pos;
+    b.n_seq_id[0] = 1;
+    b.seq_id[0][0] = 0;
+    b.logits[0] = logits;
+    return b;
+}
+
+static std::string generate_simple(const std::string& model_path, const std::string& prompt, int max_tokens) {
     if (model_path.empty()) return "Fehler: Modellpfad ist leer.";
-    if (prompt_text.empty()) return "Fehler: Prompt ist leer.";
-
+    if (prompt.empty()) return "Fehler: Prompt ist leer.";
     ggml_backend_load_all();
-    llama_model_params model_params = llama_model_default_params();
-    model_params.n_gpu_layers = 0;
-
-    llama_model* model = llama_model_load_from_file(model_path.c_str(), model_params);
-    if (model == nullptr) return "Fehler: GGUF-Modell konnte nicht geladen werden.";
-
+    llama_model_params mp = llama_model_default_params();
+    mp.n_gpu_layers = 0;
+    llama_model* model = llama_model_load_from_file(model_path.c_str(), mp);
+    if (!model) return "Fehler: Modell konnte nicht geladen werden.";
     const llama_vocab* vocab = llama_model_get_vocab(model);
-    int n_prompt = -llama_tokenize(vocab, prompt_text.c_str(), static_cast<int32_t>(prompt_text.size()), nullptr, 0, true, true);
-    if (n_prompt <= 0) { llama_model_free(model); return "Fehler: Prompt konnte nicht tokenisiert werden."; }
-
-    std::vector<llama_token> prompt_tokens(static_cast<size_t>(n_prompt));
-    int tokenized = llama_tokenize(vocab, prompt_text.c_str(), static_cast<int32_t>(prompt_text.size()), prompt_tokens.data(), static_cast<int32_t>(prompt_tokens.size()), true, true);
-    if (tokenized < 0) { llama_model_free(model); return "Fehler: Tokenisierung fehlgeschlagen."; }
-
-    llama_context_params ctx_params = llama_context_default_params();
-    ctx_params.n_ctx = std::max(n_ctx_target, tokenized + n_predict + 16);
-    ctx_params.n_batch = std::min(128, std::max(16, tokenized));
-    ctx_params.n_threads = 2;
-    ctx_params.n_threads_batch = 2;
-    ctx_params.no_perf = true;
-
-    llama_context* ctx = llama_init_from_model(model, ctx_params);
-    if (ctx == nullptr) { llama_model_free(model); return "Fehler: Kontext konnte nicht erstellt werden."; }
-
-    llama_sampler* sampler = llama_sampler_chain_init(llama_sampler_chain_default_params());
-    llama_sampler_chain_add(sampler, llama_sampler_init_greedy());
-
-    llama_batch batch = llama_batch_get_one(prompt_tokens.data(), tokenized);
-    if (llama_decode(ctx, batch) != 0) {
-        llama_sampler_free(sampler);
-        llama_free(ctx);
-        llama_model_free(model);
-        return "Fehler: Prompt-Auswertung fehlgeschlagen.";
+    int need = -llama_tokenize(vocab, prompt.c_str(), (int32_t)prompt.size(), nullptr, 0, true, true);
+    if (need <= 0) { llama_model_free(model); return "Fehler: Tokenisierung."; }
+    std::vector<llama_token> toks((size_t)need);
+    int ntok = llama_tokenize(vocab, prompt.c_str(), (int32_t)prompt.size(), toks.data(), (int32_t)toks.size(), true, true);
+    if (ntok <= 0) { llama_model_free(model); return "Fehler: Tokenisierung."; }
+    llama_context_params cp = llama_context_default_params();
+    cp.n_ctx = 512;
+    cp.n_batch = 64;
+    cp.n_threads = 2;
+    cp.n_threads_batch = 2;
+    cp.no_perf = true;
+    llama_context* ctx = llama_init_from_model(model, cp);
+    if (!ctx) { llama_model_free(model); return "Fehler: Kontext."; }
+    for (int i = 0; i < ntok; ++i) {
+        llama_batch b = one_token_batch(toks[(size_t)i], i, i == ntok - 1);
+        int rc = llama_decode(ctx, b);
+        llama_batch_free(b);
+        if (rc != 0) { llama_free(ctx); llama_model_free(model); return "Fehler: Prompt-Decode."; }
     }
-
-    std::string output;
-    for (int i = 0; i < n_predict; ++i) {
-        llama_token next_token = llama_sampler_sample(sampler, ctx, -1);
-        if (llama_vocab_is_eog(vocab, next_token)) break;
-        output += token_to_piece(vocab, next_token);
-        llama_batch next_batch = llama_batch_get_one(&next_token, 1);
-        if (llama_decode(ctx, next_batch) != 0) break;
+    llama_sampler* smp = llama_sampler_chain_init(llama_sampler_chain_default_params());
+    llama_sampler_chain_add(smp, llama_sampler_init_greedy());
+    std::string out;
+    int pos = ntok;
+    for (int i = 0; i < max_tokens; ++i) {
+        llama_token t = llama_sampler_sample(smp, ctx, -1);
+        if (llama_vocab_is_eog(vocab, t)) break;
+        out += piece(vocab, t);
+        llama_batch b = one_token_batch(t, pos++, true);
+        int rc = llama_decode(ctx, b);
+        llama_batch_free(b);
+        if (rc != 0) break;
     }
-
-    llama_sampler_free(sampler);
+    llama_sampler_free(smp);
     llama_free(ctx);
     llama_model_free(model);
-    if (output.empty()) output = "Modell geladen, aber keine Ausgabe erzeugt.";
-    return output;
+    return out.empty() ? "<keine Ausgabe>" : out;
 }
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_kurkurkury_smartphoneroleplay_ai_NativeLlamaBridge_nativeStatus(JNIEnv* env, jobject) {
-    std::string status = "Engine aktiv: llama.cpp native ist verlinkt.";
-    return env->NewStringUTF(status.c_str());
+    return env->NewStringUTF("Engine aktiv: llama.cpp native ist verlinkt.");
 }
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_kurkurkury_smartphoneroleplay_ai_NativeLlamaBridge_nativeModelLoadDiagnostic(JNIEnv* env, jobject, jstring modelPath) {
-    const std::string model_path = jstring_to_string(env, modelPath);
-    std::ostringstream report;
-    report << "Modell-Load-Test\n";
-    report << "1. Engine: llama.cpp native OK\n";
-    report << "2. Kontext/Inferenz: NICHT aktiv\n";
-    if (model_path.empty()) { report << "3. Modellpfad: FEHLER - leer"; return env->NewStringUTF(report.str().c_str()); }
-    if (!has_gguf_magic(model_path)) { report << "3. GGUF Header: FEHLER"; return env->NewStringUTF(report.str().c_str()); }
-    report << "3. GGUF Header: OK\n";
-    report << "4. Modell-Load: startet\n";
+    std::string p = js(env, modelPath);
+    std::ostringstream r;
+    r << "Modell-Load-Test\n1. Engine: llama.cpp native OK\n2. Kontext/Inferenz: NICHT aktiv\n";
+    if (!gguf(p)) { r << "3. GGUF Header: FEHLER"; return env->NewStringUTF(r.str().c_str()); }
+    r << "3. GGUF Header: OK\n4. Modell-Load: startet\n";
     ggml_backend_load_all();
-    llama_model_params model_params = llama_model_default_params();
-    model_params.n_gpu_layers = 0;
-    llama_model* model = llama_model_load_from_file(model_path.c_str(), model_params);
-    if (model == nullptr) { report << "5. Modell-Load: FEHLER - nullptr"; return env->NewStringUTF(report.str().c_str()); }
-    report << "5. Modell-Load: OK\n";
-    report << "6. Modell wird sofort freigegeben\n";
+    llama_model_params mp = llama_model_default_params();
+    mp.n_gpu_layers = 0;
+    llama_model* model = llama_model_load_from_file(p.c_str(), mp);
+    if (!model) { r << "5. Modell-Load: FEHLER"; return env->NewStringUTF(r.str().c_str()); }
+    r << "5. Modell-Load: OK\n6. Modell wird sofort freigegeben\n";
     llama_model_free(model);
-    report << "7. Modell-Free: OK\n";
-    report << "Naechster separater Schritt: Kontext-Test";
-    return env->NewStringUTF(report.str().c_str());
+    r << "7. Modell-Free: OK\nNaechster separater Schritt: Kontext-Test";
+    return env->NewStringUTF(r.str().c_str());
 }
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_kurkurkury_smartphoneroleplay_ai_NativeLlamaBridge_nativeContextDiagnostic(JNIEnv* env, jobject, jstring modelPath) {
-    const std::string model_path = jstring_to_string(env, modelPath);
-    std::ostringstream report;
-    report << "Kontext-Test\n";
-    report << "1. Engine: llama.cpp native OK\n";
-    report << "2. Inferenz: NICHT aktiv\n";
-    if (model_path.empty()) { report << "3. Modellpfad: FEHLER - leer"; return env->NewStringUTF(report.str().c_str()); }
-    if (!has_gguf_magic(model_path)) { report << "3. GGUF Header: FEHLER"; return env->NewStringUTF(report.str().c_str()); }
-    report << "3. GGUF Header: OK\n";
-    report << "4. Modell-Load: startet\n";
+    std::string p = js(env, modelPath);
+    std::ostringstream r;
+    r << "Kontext-Test\n1. Engine: llama.cpp native OK\n2. Inferenz: NICHT aktiv\n";
+    if (!gguf(p)) { r << "3. GGUF Header: FEHLER"; return env->NewStringUTF(r.str().c_str()); }
+    r << "3. GGUF Header: OK\n4. Modell-Load: startet\n";
     ggml_backend_load_all();
-    llama_model_params model_params = llama_model_default_params();
-    model_params.n_gpu_layers = 0;
-    llama_model* model = llama_model_load_from_file(model_path.c_str(), model_params);
-    if (model == nullptr) { report << "5. Modell-Load: FEHLER - nullptr"; return env->NewStringUTF(report.str().c_str()); }
-    report << "5. Modell-Load: OK\n";
-    report << "6. Kontext-Erstellung: startet\n";
-    llama_context_params ctx_params = llama_context_default_params();
-    ctx_params.n_ctx = 256;
-    ctx_params.n_batch = 64;
-    ctx_params.n_threads = 2;
-    ctx_params.n_threads_batch = 2;
-    ctx_params.no_perf = true;
-    llama_context* ctx = llama_init_from_model(model, ctx_params);
-    if (ctx == nullptr) { llama_model_free(model); report << "7. Kontext-Erstellung: FEHLER - nullptr"; return env->NewStringUTF(report.str().c_str()); }
-    report << "7. Kontext-Erstellung: OK\n";
-    report << "8. Kontext wird sofort freigegeben\n";
-    llama_free(ctx);
-    report << "9. Kontext-Free: OK\n";
-    llama_model_free(model);
-    report << "10. Modell-Free: OK\n";
-    report << "Naechster separater Schritt: Ein-Fortsetzungs-Decode-Test";
-    return env->NewStringUTF(report.str().c_str());
+    llama_model_params mp = llama_model_default_params();
+    mp.n_gpu_layers = 0;
+    llama_model* model = llama_model_load_from_file(p.c_str(), mp);
+    if (!model) { r << "5. Modell-Load: FEHLER"; return env->NewStringUTF(r.str().c_str()); }
+    r << "5. Modell-Load: OK\n6. Kontext-Erstellung: startet\n";
+    llama_context_params cp = llama_context_default_params();
+    cp.n_ctx = 256; cp.n_batch = 64; cp.n_threads = 2; cp.n_threads_batch = 2; cp.no_perf = true;
+    llama_context* ctx = llama_init_from_model(model, cp);
+    if (!ctx) { llama_model_free(model); r << "7. Kontext-Erstellung: FEHLER"; return env->NewStringUTF(r.str().c_str()); }
+    r << "7. Kontext-Erstellung: OK\n8. Kontext wird sofort freigegeben\n";
+    llama_free(ctx); llama_model_free(model);
+    r << "9. Kontext-Free: OK\n10. Modell-Free: OK\nNaechster separater Schritt: Session-Decode-Test";
+    return env->NewStringUTF(r.str().c_str());
 }
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_kurkurkury_smartphoneroleplay_ai_NativeLlamaBridge_nativeMiniInferenceDiagnostic(JNIEnv* env, jobject, jstring modelPath) {
-    const std::string model_path = jstring_to_string(env, modelPath);
-    std::ostringstream report;
-    report << "Ein-Fortsetzungs-Decode-Test\n";
-    report << "1. Engine: llama.cpp native OK\n";
-    report << "2. Prompt: Hello\n";
-    report << "3. Sampling: greedy, erstes Token + genau ein Fortsetzungs-Decode\n";
-    if (model_path.empty()) { report << "4. Modellpfad: FEHLER - leer"; return env->NewStringUTF(report.str().c_str()); }
-    if (!has_gguf_magic(model_path)) { report << "4. GGUF Header: FEHLER"; return env->NewStringUTF(report.str().c_str()); }
-    report << "4. GGUF Header: OK\n";
-    report << "5. Modell-Load: startet\n";
-    ggml_backend_load_all();
-    llama_model_params model_params = llama_model_default_params();
-    model_params.n_gpu_layers = 0;
-    llama_model* model = llama_model_load_from_file(model_path.c_str(), model_params);
-    if (model == nullptr) { report << "6. Modell-Load: FEHLER - nullptr"; return env->NewStringUTF(report.str().c_str()); }
-    report << "6. Modell-Load: OK\n";
-
-    const llama_vocab* vocab = llama_model_get_vocab(model);
-    const std::string prompt = "Hello";
-    int n_prompt = -llama_tokenize(vocab, prompt.c_str(), static_cast<int32_t>(prompt.size()), nullptr, 0, true, true);
-    if (n_prompt <= 0) { llama_model_free(model); report << "7. Tokenisierung: FEHLER - Laenge"; return env->NewStringUTF(report.str().c_str()); }
-    std::vector<llama_token> tokens(static_cast<size_t>(n_prompt));
-    int tokenized = llama_tokenize(vocab, prompt.c_str(), static_cast<int32_t>(prompt.size()), tokens.data(), static_cast<int32_t>(tokens.size()), true, true);
-    if (tokenized < 0) { llama_model_free(model); report << "7. Tokenisierung: FEHLER"; return env->NewStringUTF(report.str().c_str()); }
-    report << "7. Tokenisierung: OK\n";
-    report << "8. Token-Anzahl: " << tokenized << "\n";
-
-    llama_context_params ctx_params = llama_context_default_params();
-    ctx_params.n_ctx = 256;
-    ctx_params.n_batch = 64;
-    ctx_params.n_threads = 2;
-    ctx_params.n_threads_batch = 2;
-    ctx_params.no_perf = true;
-    llama_context* ctx = llama_init_from_model(model, ctx_params);
-    if (ctx == nullptr) { llama_model_free(model); report << "9. Kontext-Erstellung: FEHLER - nullptr"; return env->NewStringUTF(report.str().c_str()); }
-    report << "9. Kontext-Erstellung: OK\n";
-
-    report << "10. Decode Prompt: startet\n";
-    llama_batch batch = llama_batch_get_one(tokens.data(), tokenized);
-    int decode_result = llama_decode(ctx, batch);
-    if (decode_result != 0) {
-        llama_free(ctx);
-        llama_model_free(model);
-        report << "11. Decode Prompt: FEHLER - code " << decode_result;
-        return env->NewStringUTF(report.str().c_str());
-    }
-    report << "11. Decode Prompt: OK\n";
-
-    llama_sampler* sampler = llama_sampler_chain_init(llama_sampler_chain_default_params());
-    llama_sampler_chain_add(sampler, llama_sampler_init_greedy());
-    llama_token first_token = llama_sampler_sample(sampler, ctx, -1);
-    std::string first_piece = token_to_piece(vocab, first_token);
-    report << "12. Erstes Token: OK\n";
-    report << "13. Token-ID: " << first_token << "\n";
-    report << "14. Text: " << (first_piece.empty() ? "<leer>" : first_piece) << "\n";
-
-    report << "15. Fortsetzungs-Decode: startet\n";
-    llama_batch next_batch = llama_batch_get_one(&first_token, 1);
-    int continuation_result = llama_decode(ctx, next_batch);
-    if (continuation_result != 0) {
-        llama_sampler_free(sampler);
-        llama_free(ctx);
-        llama_model_free(model);
-        report << "16. Fortsetzungs-Decode: FEHLER - code " << continuation_result;
-        return env->NewStringUTF(report.str().c_str());
-    }
-    report << "16. Fortsetzungs-Decode: OK\n";
-    llama_token second_token = llama_sampler_sample(sampler, ctx, -1);
-    std::string second_piece = token_to_piece(vocab, second_token);
-    report << "17. Zweites Token Sample: OK\n";
-    report << "18. Zweite Token-ID: " << second_token << "\n";
-    report << "19. Zweiter Text: " << (second_piece.empty() ? "<leer>" : second_piece) << "\n";
-    report << "20. Aufraeumen: startet\n";
-    llama_sampler_free(sampler);
-    llama_free(ctx);
-    llama_model_free(model);
-    report << "21. Aufraeumen: OK\n";
-    report << "Naechster separater Schritt: Mini-Loop mit 2 Fortsetzungen";
-    return env->NewStringUTF(report.str().c_str());
+    std::string p = js(env, modelPath);
+    std::ostringstream r;
+    r << "Session-Decode-Test\n1. Batch: manuelle Positionen aktiv\n2. Prompt: Hallo Reya.\n3. Max Tokens: 16\n";
+    std::string out = generate_simple(p, "Hallo Reya.", 16);
+    if (out.rfind("Fehler:", 0) == 0) r << "4. Session-Decode: FEHLER\n" << out;
+    else r << "4. Session-Decode: OK\n5. Antwort:\n" << out;
+    return env->NewStringUTF(r.str().c_str());
 }
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_kurkurkury_smartphoneroleplay_ai_NativeLlamaBridge_nativeGenerate(JNIEnv* env, jobject, jstring modelPath, jstring prompt) {
-    const std::string output = run_llama_generation(jstring_to_string(env, modelPath), jstring_to_string(env, prompt), 96, 512);
-    return env->NewStringUTF(output.c_str());
+    std::string out = generate_simple(js(env, modelPath), js(env, prompt), 64);
+    return env->NewStringUTF(out.c_str());
 }
