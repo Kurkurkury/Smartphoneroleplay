@@ -147,7 +147,7 @@ Java_com_kurkurkury_smartphoneroleplay_ai_NativeLlamaBridge_nativeContextDiagnos
     report << "9. Kontext-Free: OK\n";
     llama_model_free(model);
     report << "10. Modell-Free: OK\n";
-    report << "Naechster separater Schritt: Decode-Erstes-Token-Test";
+    report << "Naechster separater Schritt: Ein-Fortsetzungs-Decode-Test";
     return env->NewStringUTF(report.str().c_str());
 }
 
@@ -155,10 +155,10 @@ extern "C" JNIEXPORT jstring JNICALL
 Java_com_kurkurkury_smartphoneroleplay_ai_NativeLlamaBridge_nativeMiniInferenceDiagnostic(JNIEnv* env, jobject, jstring modelPath) {
     const std::string model_path = jstring_to_string(env, modelPath);
     std::ostringstream report;
-    report << "Decode-Erstes-Token-Test\n";
+    report << "Ein-Fortsetzungs-Decode-Test\n";
     report << "1. Engine: llama.cpp native OK\n";
     report << "2. Prompt: Hello\n";
-    report << "3. Sampling: greedy, 1 Token\n";
+    report << "3. Sampling: greedy, erstes Token + genau ein Fortsetzungs-Decode\n";
     if (model_path.empty()) { report << "4. Modellpfad: FEHLER - leer"; return env->NewStringUTF(report.str().c_str()); }
     if (!has_gguf_magic(model_path)) { report << "4. GGUF Header: FEHLER"; return env->NewStringUTF(report.str().c_str()); }
     report << "4. GGUF Header: OK\n";
@@ -204,16 +204,33 @@ Java_com_kurkurkury_smartphoneroleplay_ai_NativeLlamaBridge_nativeMiniInferenceD
     llama_sampler* sampler = llama_sampler_chain_init(llama_sampler_chain_default_params());
     llama_sampler_chain_add(sampler, llama_sampler_init_greedy());
     llama_token first_token = llama_sampler_sample(sampler, ctx, -1);
-    std::string piece = token_to_piece(vocab, first_token);
+    std::string first_piece = token_to_piece(vocab, first_token);
     report << "12. Erstes Token: OK\n";
     report << "13. Token-ID: " << first_token << "\n";
-    report << "14. Text: " << (piece.empty() ? "<leer>" : piece) << "\n";
-    report << "15. Aufraeumen: startet\n";
+    report << "14. Text: " << (first_piece.empty() ? "<leer>" : first_piece) << "\n";
+
+    report << "15. Fortsetzungs-Decode: startet\n";
+    llama_batch next_batch = llama_batch_get_one(&first_token, 1);
+    int continuation_result = llama_decode(ctx, next_batch);
+    if (continuation_result != 0) {
+        llama_sampler_free(sampler);
+        llama_free(ctx);
+        llama_model_free(model);
+        report << "16. Fortsetzungs-Decode: FEHLER - code " << continuation_result;
+        return env->NewStringUTF(report.str().c_str());
+    }
+    report << "16. Fortsetzungs-Decode: OK\n";
+    llama_token second_token = llama_sampler_sample(sampler, ctx, -1);
+    std::string second_piece = token_to_piece(vocab, second_token);
+    report << "17. Zweites Token Sample: OK\n";
+    report << "18. Zweite Token-ID: " << second_token << "\n";
+    report << "19. Zweiter Text: " << (second_piece.empty() ? "<leer>" : second_piece) << "\n";
+    report << "20. Aufraeumen: startet\n";
     llama_sampler_free(sampler);
     llama_free(ctx);
     llama_model_free(model);
-    report << "16. Aufraeumen: OK\n";
-    report << "Naechster separater Schritt: Ein-Fortsetzungs-Decode-Test";
+    report << "21. Aufraeumen: OK\n";
+    report << "Naechster separater Schritt: Mini-Loop mit 2 Fortsetzungen";
     return env->NewStringUTF(report.str().c_str());
 }
 
