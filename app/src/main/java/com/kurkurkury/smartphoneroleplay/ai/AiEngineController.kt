@@ -4,6 +4,7 @@ import android.content.Context
 
 class AiEngineController(context: Context) {
     private val fileManager = OnDeviceModelFileManager(context)
+    private val engineModelFileManager = EngineModelFileManager(context)
     private val mode: AiEngineMode = AiEngineMode.safeDefault
     private val plannedEngines: List<AndroidLocalLlmEngine> = listOf(
         MediaPipePlannedEngine(),
@@ -13,12 +14,12 @@ class AiEngineController(context: Context) {
     fun currentMode(): AiEngineMode = mode
 
     fun statusText(): String {
-        val modelText = if (fileManager.modelExists()) {
+        val ggufText = if (fileManager.modelExists()) {
             "GGUF-Modell importiert: ${fileManager.modelFile().length() / 1024 / 1024} MB"
         } else {
             "Kein GGUF-Modell importiert"
         }
-        return "KI-Engine: ${mode.label}\n$modelText\n${mode.description}"
+        return "KI-Engine: ${mode.label}\n$ggufText\n${engineModelFileManager.engineModelStatusMessage()}\n${mode.description}"
     }
 
     fun canUseNativeChat(): Boolean = false
@@ -31,6 +32,10 @@ class AiEngineController(context: Context) {
         appendLine("Sicherer Betrieb: Demo-Fallback bleibt aktiv.")
         appendLine("")
         appendLine(statusText())
+        appendLine("")
+        appendLine("Modelltrennung:")
+        appendLine("1. GGUF Import = alter llama.cpp Status-/Importtest")
+        appendLine("2. Engine-Modell Import = kuenftiges MediaPipe/MLC Modellpaket")
         appendLine("")
         appendLine("Vorbereitete Android-Engine-Pfade:")
         plannedEngines.forEachIndexed { index, engine ->
