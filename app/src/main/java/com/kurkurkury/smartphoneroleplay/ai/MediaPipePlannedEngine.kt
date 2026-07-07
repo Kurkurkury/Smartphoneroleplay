@@ -29,7 +29,7 @@ class MediaPipePlannedEngine(
     ): EngineGenerationResult {
         val appContext = context ?: return EngineGenerationResult(
             ok = false,
-            text = "MediaPipe Runtime nicht initialisiert.",
+            text = "RUNTIME-FEHLER: MediaPipe Runtime nicht initialisiert.",
             engineId = id
         )
 
@@ -44,14 +44,14 @@ class MediaPipePlannedEngine(
                 val result = inference.generateResponse(prompt).trim()
                 EngineGenerationResult(
                     ok = result.isNotBlank(),
-                    text = result.ifBlank { "MediaPipe Runtime hat keine Antwort erzeugt." },
+                    text = result.ifBlank { EngineFailureClassifier.emptyResponse() },
                     engineId = id
                 )
             }
         } catch (error: Throwable) {
             EngineGenerationResult(
                 ok = false,
-                text = "MediaPipe Runtime fehlgeschlagen: ${error.message ?: error.javaClass.simpleName}",
+                text = EngineFailureClassifier.classify(error),
                 engineId = id
             )
         }
