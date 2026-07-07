@@ -15,6 +15,7 @@ import android.widget.ScrollView
 import android.widget.TextView
 import com.kurkurkury.smartphoneroleplay.ai.AiEngineController
 import com.kurkurkury.smartphoneroleplay.ai.EngineModelFileManager
+import com.kurkurkury.smartphoneroleplay.ai.MediaPipePlannedEngine
 import com.kurkurkury.smartphoneroleplay.ai.NativeLlamaBridge
 import com.kurkurkury.smartphoneroleplay.ai.OnDeviceModelFileManager
 import com.kurkurkury.smartphoneroleplay.ai.OnDeviceReplyClient
@@ -198,6 +199,20 @@ class MainActivity : Activity() {
     private fun runNativeDiagnostic() {
         val bridge = NativeLlamaBridge()
         addSystemMessage(engineController.diagnosticText())
+        if (engineModelFileManager.engineModelExists()) {
+            addSystemMessage("MediaPipe Selbsttest wird gestartet...")
+            Thread {
+                val result = MediaPipePlannedEngine(applicationContext).generate(
+                    modelPath = engineModelFileManager.engineModelFile().absolutePath,
+                    character = currentCharacter,
+                    history = emptyList(),
+                    userMessage = "Antworte nur mit OK."
+                )
+                runOnUiThread {
+                    addSystemMessage("MediaPipe Selbsttest\nStatus: ${if (result.ok) "OK" else "FEHLER"}\nAntwort: ${result.text}")
+                }
+            }.start()
+        }
         if (modelFileManager.modelExists()) {
             addSystemMessage(bridge.diagnostic(modelFileManager.modelFile().absolutePath).text)
         } else {
