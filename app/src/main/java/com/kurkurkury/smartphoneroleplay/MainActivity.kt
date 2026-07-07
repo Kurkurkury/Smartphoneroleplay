@@ -1,15 +1,11 @@
 package com.kurkurkury.smartphoneroleplay
 
 import android.app.Activity
-import android.content.BroadcastReceiver
-import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
 import android.view.Gravity
 import android.view.View
@@ -17,8 +13,8 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import com.kurkurkury.smartphoneroleplay.ai.AiEngineController
 import com.kurkurkury.smartphoneroleplay.ai.NativeLlamaBridge
-import com.kurkurkury.smartphoneroleplay.ai.NativeProbeService
 import com.kurkurkury.smartphoneroleplay.ai.OnDeviceModelFileManager
 import com.kurkurkury.smartphoneroleplay.ai.OnDeviceReplyClient
 import com.kurkurkury.smartphoneroleplay.data.CharacterRepository
@@ -42,6 +38,7 @@ class MainActivity : Activity() {
     private lateinit var characterStorage: CustomCharacterStorage
     private lateinit var chatEngine: ChatEngine
     private lateinit var modelFileManager: OnDeviceModelFileManager
+    private lateinit var engineController: AiEngineController
 
     private val modelPickerRequestCode = 9124
     private val characters = mutableListOf<RoleplayCharacter>()
@@ -49,15 +46,6 @@ class MainActivity : Activity() {
     private val chatMessages = mutableListOf<ChatMessage>()
     private val currentCharacter: RoleplayCharacter
         get() = characters[currentCharacterIndex]
-
-    private val nativeProbeReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action == NativeProbeService.ACTION_RESULT) {
-                val result = intent.getStringExtra(NativeProbeService.EXTRA_RESULT).orEmpty()
-                addSystemMessage(result.ifBlank { "Isolierter Native-Probe lieferte keine Ausgabe." })
-            }
-        }
-    }
 
     private val backgroundColor = Color.rgb(6, 10, 18)
     private val panelColor = Color.rgb(15, 23, 36)
@@ -78,12 +66,12 @@ class MainActivity : Activity() {
         storage = ChatStorage(this)
         characterStorage = CustomCharacterStorage(this)
         modelFileManager = OnDeviceModelFileManager(this)
+        engineController = AiEngineController(this)
         chatEngine = ChatEngine(OnDeviceReplyClient(this))
         characters.addAll(CharacterRepository.defaultCharacters)
         characters.addAll(characterStorage.load())
         window.statusBarColor = backgroundColor
         window.navigationBarColor = backgroundColor
-        registerNativeProbeReceiver()
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -102,21 +90,6 @@ class MainActivity : Activity() {
 
         setContentView(root)
         loadCurrentChat()
-    }
-
-    override fun onDestroy() {
-        runCatching { unregisterReceiver(nativeProbeReceiver) }
-        super.onDestroy()
-    }
-
-    private fun registerNativeProbeReceiver() {
-        val filter = IntentFilter(NativeProbeService.ACTION_RESULT)
-        if (Build.VERSION.SDK_INT >= 33) {
-            registerReceiver(nativeProbeReceiver, filter, RECEIVER_NOT_EXPORTED)
-        } else {
-            @Suppress("DEPRECATION")
-            registerReceiver(nativeProbeReceiver, filter)
-        }
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -174,7 +147,7 @@ class MainActivity : Activity() {
         buttonRow.addView(actionButton("Leeren", "reset") { clearChat() }, LinearLayout.LayoutParams(0, dp(58), 1f))
         container.addView(buttonRow)
         container.addView(actionButton("Modell waehlen", "GGUF importieren") { openModelPicker() }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(58)).apply { setMargins(0, dp(8), 0, 0) })
-        container.addView(actionButton("KI-Test", "isolierter Probe") { runNativeDiagnostic() }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(58)).apply { setMargins(0, dp(8), 0, 0) })
+        container.addView(actionButton("KI-Test", "Engine Diagnose") { runNativeDiagnostic() }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(58)).apply { setMargins(0, dp(8), 0, 0) })
         return container
     }
 
@@ -207,14 +180,12 @@ class MainActivity : Activity() {
 
     private fun runNativeDiagnostic() {
         val bridge = NativeLlamaBridge()
-        if (!modelFileManager.modelExists()) {
-            addSystemMessage("Native Diagnose\nLibrary/Status: ${bridge.status()}\nModellpfad vorhanden: NEIN\nBitte zuerst ein GGUF-Modell importieren.")
-            return
+        addSystemMessage(engineController.diagnosticText())
+        if (modelFileManager.modelExists()) {
+            addSystemMessage(bridge.diagnostic(modelFileManager.modelFile().absolutePath).text)
+        } else {
+            addSystemMessage("Native Import-Status\nLibrary/Status: ${bridge.status()}\nModellpfad vorhanden: NEIN\nBitte zuerst ein Modell importieren.")
         }
-        val modelPath = modelFileManager.modelFile().absolutePath
-        addSystemMessage(bridge.diagnostic(modelPath).text)
-        addSystemMessage("Isolierter Native-Probe wird in separatem Prozess gestartet. Wenn dieser native Prozess abstuerzt, soll die Haupt-App offen bleiben.")
-        startService(Intent(this, NativeProbeService::class.java).putExtra(NativeProbeService.EXTRA_MODEL_PATH, modelPath))
     }
 
     private fun actionButton(label: String, caption: String, onClick: () -> Unit): LinearLayout {
