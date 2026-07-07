@@ -20,8 +20,8 @@ android {
         applicationId 'com.kurkurkury.smartphoneroleplay'
         minSdk 23
         targetSdk 35
-        versionCode 4
-        versionName '0.4.0'
+        versionCode 5
+        versionName '0.5.0'
         manifestPlaceholders = [
             launcherAction: 'android.intent.action.MAIN',
             launcherCategory: 'android.intent.category.LAUNCHER'
@@ -57,4 +57,8 @@ android {
     kotlinOptions {
         jvmTarget = '17'
     }
+}
+
+dependencies {
+    implementation 'com.google.mediapipe:tasks-genai:0.10.27'
 }
