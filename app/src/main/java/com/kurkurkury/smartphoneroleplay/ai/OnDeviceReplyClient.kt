@@ -23,10 +23,10 @@ class OnDeviceReplyClient(context: Context) : AiReplyClient {
                 userMessage = userMessage
             )
             if (result.ok) return result.text
-            return "${fallback.generateReply(character, history, userMessage)}\n\n[MediaPipe-Fallback: ${result.text}]"
+            return "[LOKALE KI FEHLER]\n${result.text}\n\nDer Demo-Modus wurde hier bewusst nicht als echte Antwort verwendet, damit klar bleibt: Die lokale Engine hat noch nicht erfolgreich geantwortet."
         }
 
         val base = fallback.generateReply(character, history, userMessage)
-        return "$base\n\n[Demo-Fallback aktiv. Importiere ein kompatibles .task/.litertlm Engine-Modell, um MediaPipe lokal zu verwenden.]"
+        return "$base\n\n[DEMO-MODUS: Kein .task/.litertlm Engine-Modell importiert.]"
     }
 }
