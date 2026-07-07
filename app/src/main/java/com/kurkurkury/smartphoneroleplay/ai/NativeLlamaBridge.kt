@@ -38,14 +38,16 @@ class NativeLlamaBridge {
         lines += "Modellpfad vorhanden: ${if (modelFile.exists()) "JA" else "NEIN"}"
         lines += "Modellgroesse: ${if (modelFile.exists()) "${modelFile.length() / 1024 / 1024} MB" else "unbekannt"}"
         lines += "Chat-Native-Modus: ${if (ENABLE_NATIVE_CHAT_GENERATION) "AKTIV" else "SICHER DEAKTIVIERT"}"
-        lines += "Hinweis: Session-Decode nutzt manuelle Token-Positionen. Normaler Chat bleibt Demo-Fallback."
+        lines += "Hinweis: KI-Test fuehrt keinen nativen Decode mehr aus, weil dieser Pfad auf dem Geraet abstuerzt."
         if (isAvailable && modelFile.exists()) {
             lines += ""
             lines += modelLoadDiagnostic(modelPath).text
             lines += ""
             lines += contextDiagnostic(modelPath).text
             lines += ""
-            lines += sessionDecodeDiagnostic(modelPath).text
+            lines += "Native Decode-Test: DEAKTIVIERT"
+            lines += "Grund: llama_decode/Fortsetzung beendet die App nativ."
+            lines += "Naechster notwendiger Schritt: Logcat/NDK-Crash-Symbolisierung oder Engine-Wechsel."
         }
         return NativeGenerationResult(ok = isAvailable && modelFile.exists(), text = lines.joinToString("\n"))
     }
@@ -81,18 +83,7 @@ class NativeLlamaBridge {
     }
 
     fun sessionDecodeDiagnostic(modelPath: String): NativeGenerationResult {
-        val modelFile = File(modelPath)
-        if (!isAvailable) return NativeGenerationResult(false, status())
-        if (!modelFile.exists()) return NativeGenerationResult(false, "Session-Decode-Test\nFehler: Modellpfad existiert nicht.")
-        return try {
-            val text = nativeMiniInferenceDiagnostic(modelPath).trim()
-            NativeGenerationResult(
-                ok = text.contains("Session-Decode: OK"),
-                text = text.ifBlank { "Session-Decode-Test\nFehler: Native Test lieferte keine Ausgabe." }
-            )
-        } catch (error: Throwable) {
-            NativeGenerationResult(false, "Session-Decode-Test\nFehler: ${error.message ?: error.javaClass.simpleName}.")
-        }
+        return NativeGenerationResult(false, "Session-Decode-Test ist deaktiviert, weil der native Decode-Pfad die App beendet.")
     }
 
     fun generate(modelPath: String, prompt: String): NativeGenerationResult {
