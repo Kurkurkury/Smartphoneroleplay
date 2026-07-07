@@ -14,6 +14,7 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import com.kurkurkury.smartphoneroleplay.ai.AiEngineController
+import com.kurkurkury.smartphoneroleplay.ai.EngineModelFileManager
 import com.kurkurkury.smartphoneroleplay.ai.NativeLlamaBridge
 import com.kurkurkury.smartphoneroleplay.ai.OnDeviceModelFileManager
 import com.kurkurkury.smartphoneroleplay.ai.OnDeviceReplyClient
@@ -38,9 +39,11 @@ class MainActivity : Activity() {
     private lateinit var characterStorage: CustomCharacterStorage
     private lateinit var chatEngine: ChatEngine
     private lateinit var modelFileManager: OnDeviceModelFileManager
+    private lateinit var engineModelFileManager: EngineModelFileManager
     private lateinit var engineController: AiEngineController
 
     private val modelPickerRequestCode = 9124
+    private val engineModelPickerRequestCode = 9125
     private val characters = mutableListOf<RoleplayCharacter>()
     private var currentCharacterIndex = 0
     private val chatMessages = mutableListOf<ChatMessage>()
@@ -66,6 +69,7 @@ class MainActivity : Activity() {
         storage = ChatStorage(this)
         characterStorage = CustomCharacterStorage(this)
         modelFileManager = OnDeviceModelFileManager(this)
+        engineModelFileManager = EngineModelFileManager(this)
         engineController = AiEngineController(this)
         chatEngine = ChatEngine(OnDeviceReplyClient(this))
         characters.addAll(CharacterRepository.defaultCharacters)
@@ -96,8 +100,15 @@ class MainActivity : Activity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == modelPickerRequestCode && resultCode == RESULT_OK) {
             val uri: Uri = data?.data ?: return
-            addSystemMessage("Modell wird importiert. Das kann bei grossen Dateien laenger dauern...")
+            addSystemMessage("GGUF-Modell wird importiert. Das kann bei grossen Dateien laenger dauern...")
             val result = modelFileManager.importModel(uri)
+            addSystemMessage(result.message)
+            updateCharacterHeader()
+        }
+        if (requestCode == engineModelPickerRequestCode && resultCode == RESULT_OK) {
+            val uri: Uri = data?.data ?: return
+            addSystemMessage("Engine-Modellpaket wird importiert. Das kann bei grossen Dateien laenger dauern...")
+            val result = engineModelFileManager.importEngineModel(uri)
             addSystemMessage(result.message)
             updateCharacterHeader()
         }
@@ -146,7 +157,8 @@ class MainActivity : Activity() {
         buttonRow.addView(actionButton("Neu", "erstellen") { createCharacterFromInput() }, LinearLayout.LayoutParams(0, dp(58), 1f).apply { setMargins(0, 0, dp(8), 0) })
         buttonRow.addView(actionButton("Leeren", "reset") { clearChat() }, LinearLayout.LayoutParams(0, dp(58), 1f))
         container.addView(buttonRow)
-        container.addView(actionButton("Modell waehlen", "GGUF importieren") { openModelPicker() }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(58)).apply { setMargins(0, dp(8), 0, 0) })
+        container.addView(actionButton("GGUF-Modell", "llama.cpp Import") { openModelPicker() }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(58)).apply { setMargins(0, dp(8), 0, 0) })
+        container.addView(actionButton("Engine-Modell", "MediaPipe/MLC Import") { openEngineModelPicker() }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(58)).apply { setMargins(0, dp(8), 0, 0) })
         container.addView(actionButton("KI-Test", "Engine Diagnose") { runNativeDiagnostic() }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(58)).apply { setMargins(0, dp(8), 0, 0) })
         return container
     }
@@ -178,13 +190,18 @@ class MainActivity : Activity() {
         startActivityForResult(intent, modelPickerRequestCode)
     }
 
+    private fun openEngineModelPicker() {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply { addCategory(Intent.CATEGORY_OPENABLE); type = "*/*" }
+        startActivityForResult(intent, engineModelPickerRequestCode)
+    }
+
     private fun runNativeDiagnostic() {
         val bridge = NativeLlamaBridge()
         addSystemMessage(engineController.diagnosticText())
         if (modelFileManager.modelExists()) {
             addSystemMessage(bridge.diagnostic(modelFileManager.modelFile().absolutePath).text)
         } else {
-            addSystemMessage("Native Import-Status\nLibrary/Status: ${bridge.status()}\nModellpfad vorhanden: NEIN\nBitte zuerst ein Modell importieren.")
+            addSystemMessage("Native Import-Status\nLibrary/Status: ${bridge.status()}\nGGUF-Modellpfad vorhanden: NEIN\nOptional: GGUF nur fuer alten llama.cpp Statuscheck importieren.")
         }
     }
 
@@ -226,7 +243,11 @@ class MainActivity : Activity() {
     private fun updateCharacterHeader() {
         subtitle.text = currentCharacter.description
         characterChip.text = "${currentCharacter.name} • ${currentCharacter.personality.take(24)}"
-        modelStatus.text = if (modelFileManager.modelExists()) "KI-Modell aktiv • ${modelFileManager.modelStatusMessage().removePrefix("Lokales Modell gefunden: ")}" else "Demo-Modus • kein Modell importiert"
+        modelStatus.text = when {
+            engineModelFileManager.engineModelExists() -> "Engine-Modell • ${engineModelFileManager.engineModelFile().length() / 1024 / 1024} MB"
+            modelFileManager.modelExists() -> "GGUF aktiv • ${modelFileManager.modelStatusMessage().removePrefix("Lokales Modell gefunden: ")}"
+            else -> "Demo-Modus • kein Modell importiert"
+        }
     }
 
     private fun sendMessage() {
