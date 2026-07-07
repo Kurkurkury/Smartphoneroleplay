@@ -3,11 +3,12 @@ package com.kurkurkury.smartphoneroleplay.ai
 import android.content.Context
 
 class AiEngineController(context: Context) {
-    private val fileManager = OnDeviceModelFileManager(context)
-    private val engineModelFileManager = EngineModelFileManager(context)
+    private val appContext = context.applicationContext
+    private val fileManager = OnDeviceModelFileManager(appContext)
+    private val engineModelFileManager = EngineModelFileManager(appContext)
     private val mode: AiEngineMode = AiEngineMode.safeDefault
     private val plannedEngines: List<AndroidLocalLlmEngine> = listOf(
-        MediaPipePlannedEngine(),
+        MediaPipePlannedEngine(appContext),
         MlcPlannedEngine()
     )
 
@@ -19,30 +20,34 @@ class AiEngineController(context: Context) {
         } else {
             "Kein GGUF-Modell importiert"
         }
-        return "KI-Engine: ${mode.label}\n$ggufText\n${engineModelFileManager.engineModelStatusMessage()}\n${mode.description}"
+        val runtimeText = if (engineModelFileManager.engineModelExists()) {
+            "MediaPipe Runtime: BEREIT FUER TEST"
+        } else {
+            "MediaPipe Runtime: wartet auf .task/.litertlm Engine-Modell"
+        }
+        return "KI-Engine: MediaPipe Runtime\n$ggufText\n${engineModelFileManager.engineModelStatusMessage()}\n$runtimeText\n${mode.description}"
     }
 
-    fun canUseNativeChat(): Boolean = false
+    fun canUseNativeChat(): Boolean = engineModelFileManager.engineModelExists()
 
     fun diagnosticText(): String = buildString {
         appendLine("KI-Engine Diagnose")
-        appendLine("Aktiver Modus: ${mode.label}")
-        appendLine("Native Chat-Inferenz: DEAKTIVIERT")
+        appendLine("Aktiver Chat-Modus: ${if (canUseNativeChat()) "MediaPipe Runtime" else "Demo-Fallback"}")
+        appendLine("llama.cpp Decode: DEAKTIVIERT")
         appendLine("Grund: direkter llama.cpp Decode crasht auf dem Testgeraet nativ.")
-        appendLine("Sicherer Betrieb: Demo-Fallback bleibt aktiv.")
         appendLine("")
         appendLine(statusText())
         appendLine("")
         appendLine("Modelltrennung:")
         appendLine("1. GGUF Import = alter llama.cpp Status-/Importtest")
-        appendLine("2. Engine-Modell Import = kuenftiges MediaPipe/MLC Modellpaket")
+        appendLine("2. Engine-Modell Import = MediaPipe .task/.litertlm Modellpaket")
         appendLine("")
-        appendLine("Vorbereitete Android-Engine-Pfade:")
+        appendLine("Android-Engine-Pfade:")
         plannedEngines.forEachIndexed { index, engine ->
             appendLine("${index + 1}. ${engine.displayName}")
             appendLine("   Status: ${engine.status()}")
         }
         appendLine("")
-        appendLine("Wichtig: Dein aktuelles GGUF-Modell bleibt als Import-Test nuetzlich, aber MediaPipe/MLC brauchen voraussichtlich ein kompatibles Engine-Modellpaket statt direkter GGUF-Inferenz.")
+        appendLine("Wenn ein kompatibles Engine-Modell importiert ist, versucht der normale Chat automatisch MediaPipe und faellt bei Fehler sauber auf Demo zurueck.")
     }
 }
