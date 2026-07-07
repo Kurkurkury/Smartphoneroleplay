@@ -6,20 +6,25 @@ import com.kurkurkury.smartphoneroleplay.model.RoleplayCharacter
 
 class MediaPipePlannedEngine(
     private val context: Context? = null
-) : AndroidLocalLlmEngine {
+) : AndroidLocalLlmEngine, AutoCloseable {
     override val id: String = "mediapipe-runtime"
     override val displayName: String = "MediaPipe LLM Runtime"
+
+    private var activeModelPath: String? = null
+    private var session: MediaPipeEngineSession? = null
 
     override fun isAvailable(): Boolean = context != null
 
     override fun status(): String {
-        return if (context == null) {
-            "MediaPipe LLM Runtime ist eingebunden, aber fuer diesen Statuscheck noch nicht initialisiert."
-        } else {
-            "MediaPipe LLM Runtime eingebunden. Benoetigt kompatibles .task/.litertlm Engine-Modellpaket."
+        val currentSession = session
+        return when {
+            context == null -> "MediaPipe LLM Runtime ist eingebunden, aber fuer diesen Statuscheck noch nicht initialisiert."
+            currentSession != null -> currentSession.status()
+            else -> "MediaPipe LLM Runtime eingebunden. Benoetigt kompatibles .task/.litertlm Engine-Modellpaket."
         }
     }
 
+    @Synchronized
     override fun generate(
         modelPath: String,
         character: RoleplayCharacter,
@@ -33,9 +38,24 @@ class MediaPipePlannedEngine(
         )
 
         val prompt = buildPrompt(character, history, userMessage)
-        return MediaPipeEngineSession(appContext, modelPath).use { session ->
-            session.generate(prompt)
-        }
+        val currentSession = ensureSession(appContext, modelPath)
+        return currentSession.generate(prompt)
+    }
+
+    @Synchronized
+    private fun ensureSession(appContext: Context, modelPath: String): MediaPipeEngineSession {
+        val existing = session
+        if (existing != null && activeModelPath == modelPath) return existing
+        existing?.close()
+        activeModelPath = modelPath
+        return MediaPipeEngineSession(appContext, modelPath).also { session = it }
+    }
+
+    @Synchronized
+    override fun close() {
+        session?.close()
+        session = null
+        activeModelPath = null
     }
 
     private fun buildPrompt(
