@@ -5,7 +5,7 @@ import com.kurkurkury.smartphoneroleplay.model.ChatMessage
 import com.kurkurkury.smartphoneroleplay.model.RoleplayCharacter
 
 class OnDeviceReplyClient(context: Context) : AiReplyClient {
-    private val fileManager = OnDeviceModelFileManager(context)
+    private val engineController = AiEngineController(context)
     private val fallback = DemoAiReplyClient()
 
     override fun generateReply(
@@ -14,11 +14,6 @@ class OnDeviceReplyClient(context: Context) : AiReplyClient {
         userMessage: String
     ): String {
         val base = fallback.generateReply(character, history, userMessage)
-        val modelInfo = if (fileManager.modelExists()) {
-            "Lokales Modell erkannt: ${fileManager.modelFile().length() / 1024 / 1024} MB. Native Diagnose ist vom normalen Senden getrennt, damit die App stabil bleibt."
-        } else {
-            "Kein lokales Modell importiert. Stabiler Demo-Modus aktiv."
-        }
-        return "$base\n\n[$modelInfo]"
+        return "$base\n\n[${engineController.currentMode().label}: stabiler Demo-Fallback aktiv. Native llama.cpp-Inferenz ist deaktiviert, bis eine robuste Android-Engine angebunden ist.]"
     }
 }
