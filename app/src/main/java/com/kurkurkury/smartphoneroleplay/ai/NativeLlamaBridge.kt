@@ -22,10 +22,10 @@ class NativeLlamaBridge {
 
     fun status(): String {
         if (!isAvailable) {
-            return "Native KI ist nicht aktiv: ${loadFailure?.javaClass?.simpleName ?: "Bibliothek fehlt"}. Demo-Modus laeuft stabil."
+            return "Native llama.cpp ist nicht aktiv: ${loadFailure?.javaClass?.simpleName ?: "Bibliothek fehlt"}. Demo-Modus laeuft stabil."
         }
         return try { nativeStatus() } catch (error: Throwable) {
-            "Native KI konnte nicht abgefragt werden: ${error.message ?: error.javaClass.simpleName}. Demo-Modus bleibt aktiv."
+            "Native llama.cpp konnte nicht abgefragt werden: ${error.message ?: error.javaClass.simpleName}. Demo-Modus bleibt aktiv."
         }
     }
 
@@ -33,12 +33,13 @@ class NativeLlamaBridge {
         val modelFile = File(modelPath)
         val lines = mutableListOf<String>()
         lines += "Native Diagnose"
+        lines += "Engine-Strategie: llama.cpp Decode ist deaktiviert; Wechsel auf stabilere Android-Engine vorbereitet."
         lines += "Library geladen: ${if (isAvailable) "JA" else "NEIN"}"
         lines += "Native Status: ${status()}"
         lines += "Modellpfad vorhanden: ${if (modelFile.exists()) "JA" else "NEIN"}"
         lines += "Modellgroesse: ${if (modelFile.exists()) "${modelFile.length() / 1024 / 1024} MB" else "unbekannt"}"
         lines += "Chat-Native-Modus: ${if (ENABLE_NATIVE_CHAT_GENERATION) "AKTIV" else "SICHER DEAKTIVIERT"}"
-        lines += "Hinweis: KI-Test fuehrt keinen nativen Decode mehr aus, weil dieser Pfad auf dem Geraet abstuerzt."
+        lines += "Hinweis: Der bekannte crashende llama_decode-Pfad wird nicht mehr ausgefuehrt."
         if (isAvailable && modelFile.exists()) {
             lines += ""
             lines += modelLoadDiagnostic(modelPath).text
@@ -46,8 +47,8 @@ class NativeLlamaBridge {
             lines += contextDiagnostic(modelPath).text
             lines += ""
             lines += "Native Decode-Test: DEAKTIVIERT"
-            lines += "Grund: llama_decode/Fortsetzung beendet die App nativ."
-            lines += "Naechster notwendiger Schritt: Logcat/NDK-Crash-Symbolisierung oder Engine-Wechsel."
+            lines += "Grund: llama_decode beendet die App nativ auf dem Testgeraet."
+            lines += "Naechster Engine-Pfad: MediaPipe/MLC statt direkter llama.cpp Decode-Schleife."
         }
         return NativeGenerationResult(ok = isAvailable && modelFile.exists(), text = lines.joinToString("\n"))
     }
@@ -83,12 +84,12 @@ class NativeLlamaBridge {
     }
 
     fun sessionDecodeDiagnostic(modelPath: String): NativeGenerationResult {
-        return NativeGenerationResult(false, "Session-Decode-Test ist deaktiviert, weil der native Decode-Pfad die App beendet.")
+        return NativeGenerationResult(false, "Session-Decode-Test ist deaktiviert, weil der native llama_decode-Pfad die App beendet.")
     }
 
     fun generate(modelPath: String, prompt: String): NativeGenerationResult {
         if (!ENABLE_NATIVE_CHAT_GENERATION) {
-            return NativeGenerationResult(false, "Native Chat-Generierung ist im Diagnose-Build sicher deaktiviert. Modell bleibt importiert; Demo-Fallback verhindert App-Absturz.")
+            return NativeGenerationResult(false, "Native llama.cpp-Generierung ist deaktiviert. Engine-Wechsel ist vorbereitet; Demo-Fallback verhindert App-Absturz.")
         }
         if (!isAvailable) return NativeGenerationResult(false, status())
         return try {
