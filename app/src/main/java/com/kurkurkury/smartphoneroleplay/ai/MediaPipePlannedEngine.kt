@@ -1,7 +1,6 @@
 package com.kurkurkury.smartphoneroleplay.ai
 
 import android.content.Context
-import com.google.mediapipe.tasks.genai.llminference.LlmInference
 import com.kurkurkury.smartphoneroleplay.model.ChatMessage
 import com.kurkurkury.smartphoneroleplay.model.RoleplayCharacter
 
@@ -34,26 +33,8 @@ class MediaPipePlannedEngine(
         )
 
         val prompt = buildPrompt(character, history, userMessage)
-        return try {
-            val options = LlmInference.LlmInferenceOptions.builder()
-                .setModelPath(modelPath)
-                .setMaxTokens(512)
-                .setMaxTopK(40)
-                .build()
-            LlmInference.createFromOptions(appContext, options).use { inference ->
-                val result = inference.generateResponse(prompt).trim()
-                EngineGenerationResult(
-                    ok = result.isNotBlank(),
-                    text = result.ifBlank { EngineFailureClassifier.emptyResponse() },
-                    engineId = id
-                )
-            }
-        } catch (error: Throwable) {
-            EngineGenerationResult(
-                ok = false,
-                text = EngineFailureClassifier.classify(error),
-                engineId = id
-            )
+        return MediaPipeEngineSession(appContext, modelPath).use { session ->
+            session.generate(prompt)
         }
     }
 
