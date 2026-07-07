@@ -13,5 +13,9 @@
                 <category android:name="${launcherCategory}" />
             </intent-filter>
         </activity>
+        <service
+            android:name=".ai.NativeProbeService"
+            android:exported="false"
+            android:process=":nativeprobe" />
     </application>
 </manifest>
