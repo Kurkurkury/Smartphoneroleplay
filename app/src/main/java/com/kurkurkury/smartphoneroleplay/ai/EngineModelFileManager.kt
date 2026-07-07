@@ -23,7 +23,9 @@ class EngineModelFileManager(private val context: Context) {
 
     fun engineModelStatusMessage(): String {
         return if (engineModelExists()) {
-            "Engine-Modellpaket gefunden: ${engineModelFile().name} (${engineModelFile().length() / 1024 / 1024} MB)"
+            val file = engineModelFile()
+            val compatibility = EngineModelCompatibility.fromFileName(file.name)
+            "Engine-Modellpaket gefunden: ${file.name} (${file.length() / 1024 / 1024} MB)\n${compatibility.engineName}: ${compatibility.message}"
         } else {
             "Kein Engine-Modellpaket importiert (.task/.litertlm erwartet)"
         }
@@ -32,10 +34,11 @@ class EngineModelFileManager(private val context: Context) {
     fun importEngineModel(uri: Uri): ModelImportResult {
         return try {
             val originalName = displayName(uri)
-            val extension = extensionOf(originalName)
-            if (extension !in SUPPORTED_EXTENSIONS) {
-                return ModelImportResult(false, "Engine-Modellimport nicht moeglich: Bitte .task oder .litertlm auswaehlen.")
+            val compatibility = EngineModelCompatibility.fromFileName(originalName)
+            if (!compatibility.supported) {
+                return ModelImportResult(false, "Engine-Modellimport nicht moeglich: ${compatibility.message}")
             }
+            val extension = compatibility.extension
 
             val target = File(context.filesDir, "$ENGINE_MODEL_DIR/engine_model.$extension")
             target.parentFile?.mkdirs()
@@ -43,7 +46,7 @@ class EngineModelFileManager(private val context: Context) {
                 if (input == null) return ModelImportResult(false, "Engine-Modellimport fehlgeschlagen: Datei konnte nicht geoeffnet werden.")
                 target.outputStream().use { output -> input.copyTo(output) }
             }
-            ModelImportResult(true, "Engine-Modell importiert: ${target.name} (${target.length() / 1024 / 1024} MB)")
+            ModelImportResult(true, "Engine-Modell importiert: ${target.name} (${target.length() / 1024 / 1024} MB)\n${compatibility.engineName}: ${compatibility.message}")
         } catch (error: Throwable) {
             ModelImportResult(false, "Engine-Modellimport fehlgeschlagen: ${error.message ?: error.javaClass.simpleName}")
         }
