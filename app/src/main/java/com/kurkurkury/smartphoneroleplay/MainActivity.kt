@@ -16,7 +16,6 @@ import android.widget.TextView
 import com.kurkurkury.smartphoneroleplay.ai.AiEngineController
 import com.kurkurkury.smartphoneroleplay.ai.EngineModelFileManager
 import com.kurkurkury.smartphoneroleplay.ai.MediaPipePlannedEngine
-import com.kurkurkury.smartphoneroleplay.ai.NativeLlamaBridge
 import com.kurkurkury.smartphoneroleplay.ai.OnDeviceModelFileManager
 import com.kurkurkury.smartphoneroleplay.ai.OnDeviceReplyClient
 import com.kurkurkury.smartphoneroleplay.data.CharacterRepository
@@ -169,9 +168,9 @@ class MainActivity : Activity() {
         buttonRow.addView(actionButton("Neu", "erstellen") { createCharacterFromInput() }, LinearLayout.LayoutParams(0, dp(58), 1f).apply { setMargins(0, 0, dp(8), 0) })
         buttonRow.addView(actionButton("Leeren", "reset") { clearChat() }, LinearLayout.LayoutParams(0, dp(58), 1f))
         container.addView(buttonRow)
-        container.addView(actionButton("GGUF-Modell", "llama.cpp Chat") { openModelPicker() }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(58)).apply { setMargins(0, dp(8), 0, 0) })
+        container.addView(actionButton("GGUF-Modell", "llama.cpp Safe") { openModelPicker() }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(58)).apply { setMargins(0, dp(8), 0, 0) })
         container.addView(actionButton("Engine-Modell", "MediaPipe Fallback") { openEngineModelPicker() }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(58)).apply { setMargins(0, dp(8), 0, 0) })
-        container.addView(actionButton("KI-Test", "Engine Diagnose") { runNativeDiagnostic() }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(58)).apply { setMargins(0, dp(8), 0, 0) })
+        container.addView(actionButton("KI-Test", "sichere Diagnose") { runNativeDiagnostic() }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(58)).apply { setMargins(0, dp(8), 0, 0) })
         return container
     }
 
@@ -208,10 +207,9 @@ class MainActivity : Activity() {
     }
 
     private fun runNativeDiagnostic() {
-        val bridge = NativeLlamaBridge()
         addSystemMessage(engineController.diagnosticText())
         if (modelFileManager.modelExists()) {
-            addSystemMessage(bridge.diagnostic(modelFileManager.modelFile().absolutePath).text)
+            addSystemMessage("GGUF Safe-Diagnose\nModell erkannt: ${modelFileManager.modelFile().length() / 1024 / 1024} MB\nDirekter llama.cpp Load/Decode-Test ist nach dem Realgeraet-Crash deaktiviert, damit die Haupt-App nicht erneut beendet wird.\nNaechster sinnvoller Test: kleineres GGUF-Modell unter ca. 1 GB oder separater isolierter Testprozess.")
         }
         if (engineModelFileManager.engineModelExists()) {
             addSystemMessage("MediaPipe Selbsttest wird gestartet...")
@@ -229,7 +227,7 @@ class MainActivity : Activity() {
             }.start()
         }
         if (!modelFileManager.modelExists() && !engineModelFileManager.engineModelExists()) {
-            addSystemMessage("Import-Status\nGGUF-Modellpfad vorhanden: NEIN\nEngine-Modellpfad vorhanden: NEIN\nFuer direkte lokale KI: GGUF-Modell importieren.")
+            addSystemMessage("Import-Status\nGGUF-Modellpfad vorhanden: NEIN\nEngine-Modellpfad vorhanden: NEIN\nFuer lokale KI: kleines GGUF-Modell importieren.")
         }
     }
 
@@ -281,7 +279,7 @@ class MainActivity : Activity() {
         characterChip.text = "${currentCharacter.name} • ${currentCharacter.personality.take(24)}"
         modelStatus.text = when {
             replyInProgress -> "KI antwortet..."
-            modelFileManager.modelExists() -> "GGUF aktiv • ${modelFileManager.modelStatusMessage().removePrefix("Lokales Modell gefunden: ")}"
+            modelFileManager.modelExists() -> "GGUF Safe • ${modelFileManager.modelStatusMessage().removePrefix("Lokales Modell gefunden: ")}"
             engineModelFileManager.engineModelExists() -> "MediaPipe • ${engineModelFileManager.engineModelFile().length() / 1024 / 1024} MB"
             else -> "Demo-Modus • kein GGUF importiert"
         }
