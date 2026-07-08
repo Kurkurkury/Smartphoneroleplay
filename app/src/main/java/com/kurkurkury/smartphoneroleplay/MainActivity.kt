@@ -32,6 +32,7 @@ import java.util.Locale
 class MainActivity : Activity() {
     private lateinit var messagesView: LinearLayout
     private lateinit var input: EditText
+    private lateinit var sendButton: TextView
     private lateinit var scrollView: ScrollView
     private lateinit var subtitle: TextView
     private lateinit var modelStatus: TextView
@@ -39,6 +40,7 @@ class MainActivity : Activity() {
     private lateinit var storage: ChatStorage
     private lateinit var characterStorage: CustomCharacterStorage
     private lateinit var chatEngine: ChatEngine
+    private lateinit var replyClient: OnDeviceReplyClient
     private lateinit var modelFileManager: OnDeviceModelFileManager
     private lateinit var engineModelFileManager: EngineModelFileManager
     private lateinit var engineController: AiEngineController
@@ -47,6 +49,8 @@ class MainActivity : Activity() {
     private val engineModelPickerRequestCode = 9125
     private val characters = mutableListOf<RoleplayCharacter>()
     private var currentCharacterIndex = 0
+    private var replyInProgress = false
+    private var destroyed = false
     private val chatMessages = mutableListOf<ChatMessage>()
     private val currentCharacter: RoleplayCharacter
         get() = characters[currentCharacterIndex]
@@ -72,7 +76,8 @@ class MainActivity : Activity() {
         modelFileManager = OnDeviceModelFileManager(this)
         engineModelFileManager = EngineModelFileManager(this)
         engineController = AiEngineController(this)
-        chatEngine = ChatEngine(OnDeviceReplyClient(this))
+        replyClient = OnDeviceReplyClient(this)
+        chatEngine = ChatEngine(replyClient)
         characters.addAll(CharacterRepository.defaultCharacters)
         characters.addAll(characterStorage.load())
         window.statusBarColor = backgroundColor
@@ -95,6 +100,12 @@ class MainActivity : Activity() {
 
         setContentView(root)
         loadCurrentChat()
+    }
+
+    override fun onDestroy() {
+        destroyed = true
+        replyClient.close()
+        super.onDestroy()
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -158,8 +169,8 @@ class MainActivity : Activity() {
         buttonRow.addView(actionButton("Neu", "erstellen") { createCharacterFromInput() }, LinearLayout.LayoutParams(0, dp(58), 1f).apply { setMargins(0, 0, dp(8), 0) })
         buttonRow.addView(actionButton("Leeren", "reset") { clearChat() }, LinearLayout.LayoutParams(0, dp(58), 1f))
         container.addView(buttonRow)
-        container.addView(actionButton("GGUF-Modell", "llama.cpp Import") { openModelPicker() }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(58)).apply { setMargins(0, dp(8), 0, 0) })
-        container.addView(actionButton("Engine-Modell", "MediaPipe/MLC Import") { openEngineModelPicker() }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(58)).apply { setMargins(0, dp(8), 0, 0) })
+        container.addView(actionButton("GGUF-Modell", "llama.cpp Diagnose") { openModelPicker() }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(58)).apply { setMargins(0, dp(8), 0, 0) })
+        container.addView(actionButton("Engine-Modell", "MediaPipe Import") { openEngineModelPicker() }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(58)).apply { setMargins(0, dp(8), 0, 0) })
         container.addView(actionButton("KI-Test", "Engine Diagnose") { runNativeDiagnostic() }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(58)).apply { setMargins(0, dp(8), 0, 0) })
         return container
     }
@@ -178,7 +189,7 @@ class MainActivity : Activity() {
             setSingleLine(false); minLines = 1; maxLines = 4; background = null; includeFontPadding = false
         }
         inputCard.addView(input, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        val sendButton = TextView(this).apply {
+        sendButton = TextView(this).apply {
             text = "Senden"; textSize = 15f; typeface = Typeface.DEFAULT_BOLD; gravity = Gravity.CENTER; setTextColor(Color.WHITE)
             setPadding(dp(18), 0, dp(18), 0); background = rounded(primaryColor, 24f); setOnClickListener { sendMessage() }
         }
@@ -201,15 +212,16 @@ class MainActivity : Activity() {
         addSystemMessage(engineController.diagnosticText())
         if (engineModelFileManager.engineModelExists()) {
             addSystemMessage("MediaPipe Selbsttest wird gestartet...")
+            val characterSnapshot = currentCharacter
             Thread {
                 val result = MediaPipePlannedEngine(applicationContext).generate(
                     modelPath = engineModelFileManager.engineModelFile().absolutePath,
-                    character = currentCharacter,
+                    character = characterSnapshot,
                     history = emptyList(),
                     userMessage = "Antworte nur mit OK."
                 )
                 runOnUiThread {
-                    addSystemMessage("MediaPipe Selbsttest\nStatus: ${if (result.ok) "OK" else "FEHLER"}\nAntwort: ${result.text}")
+                    if (!destroyed) addSystemMessage("MediaPipe Selbsttest\nStatus: ${if (result.ok) "OK" else "FEHLER"}\nAntwort: ${result.text}")
                 }
             }.start()
         }
@@ -230,9 +242,13 @@ class MainActivity : Activity() {
         return button
     }
 
-    private fun switchCharacter() { saveCurrentChat(); currentCharacterIndex = (currentCharacterIndex + 1) % characters.size; loadCurrentChat() }
+    private fun switchCharacter() {
+        if (replyInProgress) { addSystemMessage("Bitte warten: Die KI-Antwort laeuft noch."); return }
+        saveCurrentChat(); currentCharacterIndex = (currentCharacterIndex + 1) % characters.size; loadCurrentChat()
+    }
 
     private fun createCharacterFromInput() {
+        if (replyInProgress) { addSystemMessage("Bitte warten: Die KI-Antwort laeuft noch."); return }
         val raw = input.text.toString().trim()
         if (raw.isEmpty()) { addSystemMessage("Neuer Charakter: Name; Beschreibung; Begruessung"); return }
         val parts = raw.split(";").map { it.trim() }
@@ -253,22 +269,52 @@ class MainActivity : Activity() {
     }
 
     private fun saveCurrentChat() { storage.save(currentCharacter.id, chatMessages) }
-    private fun clearChat() { storage.clear(currentCharacter.id); chatMessages.clear(); chatMessages.add(ChatMessage(currentCharacter.name, currentCharacter.greeting)); renderChat(); saveCurrentChat() }
+
+    private fun clearChat() {
+        if (replyInProgress) { addSystemMessage("Bitte warten: Die KI-Antwort laeuft noch."); return }
+        storage.clear(currentCharacter.id); chatMessages.clear(); chatMessages.add(ChatMessage(currentCharacter.name, currentCharacter.greeting)); renderChat(); saveCurrentChat()
+    }
 
     private fun updateCharacterHeader() {
         subtitle.text = currentCharacter.description
         characterChip.text = "${currentCharacter.name} • ${currentCharacter.personality.take(24)}"
         modelStatus.text = when {
+            replyInProgress -> "KI antwortet..."
             engineModelFileManager.engineModelExists() -> "Engine-Modell • ${engineModelFileManager.engineModelFile().length() / 1024 / 1024} MB"
-            modelFileManager.modelExists() -> "GGUF aktiv • ${modelFileManager.modelStatusMessage().removePrefix("Lokales Modell gefunden: ")}"
-            else -> "Demo-Modus • kein Modell importiert"
+            modelFileManager.modelExists() -> "GGUF Diagnose • ${modelFileManager.modelStatusMessage().removePrefix("Lokales Modell gefunden: ")}"
+            else -> "Demo-Modus • kein Engine-Modell importiert"
         }
     }
 
+    private fun setReplyInProgress(active: Boolean) {
+        replyInProgress = active
+        input.isEnabled = !active
+        sendButton.isEnabled = !active
+        sendButton.alpha = if (active) 0.55f else 1.0f
+        sendButton.text = if (active) "..." else "Senden"
+        updateCharacterHeader()
+    }
+
     private fun sendMessage() {
-        val text = input.text.toString().trim(); if (text.isEmpty()) return
-        input.setText(""); chatMessages.add(ChatMessage("Du", text)); renderChat(); scrollView.post { scrollView.fullScroll(View.FOCUS_DOWN) }
-        chatMessages.add(chatEngine.createReply(currentCharacter, chatMessages, text)); renderChat(); saveCurrentChat()
+        val text = input.text.toString().trim()
+        if (text.isEmpty() || replyInProgress) return
+        val characterSnapshot = currentCharacter
+        input.setText("")
+        chatMessages.add(ChatMessage("Du", text))
+        val historySnapshot = chatMessages.toList()
+        renderChat(); scrollView.post { scrollView.fullScroll(View.FOCUS_DOWN) }
+        saveCurrentChat()
+        setReplyInProgress(true)
+        Thread {
+            val reply = chatEngine.createReply(characterSnapshot, historySnapshot, text)
+            runOnUiThread {
+                if (destroyed) return@runOnUiThread
+                chatMessages.add(reply)
+                renderChat()
+                saveCurrentChat()
+                setReplyInProgress(false)
+            }
+        }.start()
     }
 
     private fun addSystemMessage(text: String) { chatMessages.add(ChatMessage("System", text)); renderChat(); saveCurrentChat() }
