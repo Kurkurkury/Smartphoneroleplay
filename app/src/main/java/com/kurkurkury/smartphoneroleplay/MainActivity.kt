@@ -29,6 +29,11 @@ import java.util.Date
 import java.util.Locale
 
 class MainActivity : Activity() {
+    companion object {
+        private const val PREFS_NAME = "smartphone_roleplay_prefs"
+        private const val PREF_LAST_CHARACTER_ID = "last_character_id"
+    }
+
     private lateinit var messagesView: LinearLayout
     private lateinit var input: EditText
     private lateinit var sendButton: TextView
@@ -44,6 +49,7 @@ class MainActivity : Activity() {
     private lateinit var engineModelFileManager: EngineModelFileManager
     private lateinit var engineController: AiEngineController
 
+    private val prefs by lazy { getSharedPreferences(PREFS_NAME, MODE_PRIVATE) }
     private val modelPickerRequestCode = 9124
     private val engineModelPickerRequestCode = 9125
     private val characters = mutableListOf<RoleplayCharacter>()
@@ -79,6 +85,7 @@ class MainActivity : Activity() {
         chatEngine = ChatEngine(replyClient)
         characters.addAll(CharacterRepository.defaultCharacters)
         characters.addAll(characterStorage.load())
+        restoreLastCharacter()
         window.statusBarColor = backgroundColor
         window.navigationBarColor = backgroundColor
 
@@ -166,10 +173,14 @@ class MainActivity : Activity() {
         val buttonRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         buttonRow.addView(actionButton("Figur", "wechseln") { switchCharacter() }, LinearLayout.LayoutParams(0, dp(58), 1f).apply { setMargins(0, 0, dp(8), 0) })
         buttonRow.addView(actionButton("Neu", "erstellen") { createCharacterFromInput() }, LinearLayout.LayoutParams(0, dp(58), 1f).apply { setMargins(0, 0, dp(8), 0) })
-        buttonRow.addView(actionButton("Leeren", "reset") { clearChat() }, LinearLayout.LayoutParams(0, dp(58), 1f))
+        buttonRow.addView(actionButton("Leeren", "Chat reset") { clearChat() }, LinearLayout.LayoutParams(0, dp(58), 1f))
         container.addView(buttonRow)
-        container.addView(actionButton("GGUF-Modell", "llama.cpp Safe") { openModelPicker() }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(58)).apply { setMargins(0, dp(8), 0, 0) })
+        container.addView(actionButton("GGUF-Modell", "importieren / ersetzen") { openModelPicker() }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(58)).apply { setMargins(0, dp(8), 0, 0) })
         container.addView(actionButton("Engine-Modell", "MediaPipe Fallback") { openEngineModelPicker() }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(58)).apply { setMargins(0, dp(8), 0, 0) })
+        val modelRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        modelRow.addView(actionButton("GGUF weg", "Modell loeschen") { clearGgufModel() }, LinearLayout.LayoutParams(0, dp(54), 1f).apply { setMargins(0, dp(8), dp(8), 0) })
+        modelRow.addView(actionButton("Engine weg", "Fallback loeschen") { clearEngineModel() }, LinearLayout.LayoutParams(0, dp(54), 1f).apply { setMargins(0, dp(8), 0, 0) })
+        container.addView(modelRow)
         container.addView(actionButton("KI-Test", "sichere Diagnose") { runNativeDiagnostic() }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(58)).apply { setMargins(0, dp(8), 0, 0) })
         return container
     }
@@ -206,10 +217,28 @@ class MainActivity : Activity() {
         startActivityForResult(intent, engineModelPickerRequestCode)
     }
 
+    private fun clearGgufModel() {
+        if (replyInProgress) { addSystemMessage("Bitte warten: Die KI-Antwort laeuft noch."); return }
+        addSystemMessage(modelFileManager.clearModel().message)
+        updateCharacterHeader()
+    }
+
+    private fun clearEngineModel() {
+        if (replyInProgress) { addSystemMessage("Bitte warten: Die KI-Antwort laeuft noch."); return }
+        addSystemMessage(engineModelFileManager.clearEngineModel().message)
+        updateCharacterHeader()
+    }
+
     private fun runNativeDiagnostic() {
         addSystemMessage(engineController.diagnosticText())
         if (modelFileManager.modelExists()) {
-            addSystemMessage("GGUF Safe-Diagnose\nModell erkannt: ${modelFileManager.modelFile().length() / 1024 / 1024} MB\nDirekter llama.cpp Load/Decode-Test ist nach dem Realgeraet-Crash deaktiviert, damit die Haupt-App nicht erneut beendet wird.\nNaechster sinnvoller Test: kleineres GGUF-Modell unter ca. 1 GB oder separater isolierter Testprozess.")
+            val sizeMb = modelFileManager.modelFile().length() / 1024 / 1024
+            val advice = if (modelFileManager.isLargeForPhone()) {
+                "Dieses Modell ist gross fuer Smartphone-Inferenz. Direkter llama.cpp Load/Decode bleibt im Hauptprozess gesperrt. Empfehlung: GGUF weg loeschen oder ein kleineres Modell unter ca. 1 GB testen."
+            } else {
+                "Dieses Modell ist klein genug fuer den naechsten isolierten GGUF-Testpfad. Direkter Load/Decode bleibt trotzdem im Hauptprozess gesperrt, damit die App nicht crasht."
+            }
+            addSystemMessage("GGUF Safe-Diagnose\nModell erkannt: ${sizeMb} MB\n$advice")
         }
         if (engineModelFileManager.engineModelExists()) {
             addSystemMessage("MediaPipe Selbsttest wird gestartet...")
@@ -227,7 +256,7 @@ class MainActivity : Activity() {
             }.start()
         }
         if (!modelFileManager.modelExists() && !engineModelFileManager.engineModelExists()) {
-            addSystemMessage("Import-Status\nGGUF-Modellpfad vorhanden: NEIN\nEngine-Modellpfad vorhanden: NEIN\nFuer lokale KI: kleines GGUF-Modell importieren.")
+            addSystemMessage("Import-Status\nGGUF-Modellpfad vorhanden: NEIN\nEngine-Modellpfad vorhanden: NEIN\nDie App laeuft stabil im Demo-Modus.")
         }
     }
 
@@ -243,7 +272,10 @@ class MainActivity : Activity() {
 
     private fun switchCharacter() {
         if (replyInProgress) { addSystemMessage("Bitte warten: Die KI-Antwort laeuft noch."); return }
-        saveCurrentChat(); currentCharacterIndex = (currentCharacterIndex + 1) % characters.size; loadCurrentChat()
+        saveCurrentChat()
+        currentCharacterIndex = (currentCharacterIndex + 1) % characters.size
+        rememberCurrentCharacter()
+        loadCurrentChat()
     }
 
     private fun createCharacterFromInput() {
@@ -258,12 +290,29 @@ class MainActivity : Activity() {
             greeting = parts.getOrNull(2).orEmpty().ifBlank { "Hi, ich bin ${parts.getOrNull(0).orEmpty().ifBlank { "Neuer Charakter" }}. Starte eine Szene." },
             personality = "benutzerdefiniert"
         )
-        characters.add(customCharacter); characterStorage.save(characters.drop(CharacterRepository.defaultCharacters.size)); input.setText(""); saveCurrentChat(); currentCharacterIndex = characters.lastIndex; loadCurrentChat()
+        characters.add(customCharacter)
+        characterStorage.save(characters.drop(CharacterRepository.defaultCharacters.size))
+        input.setText("")
+        saveCurrentChat()
+        currentCharacterIndex = characters.lastIndex
+        rememberCurrentCharacter()
+        loadCurrentChat()
+    }
+
+    private fun restoreLastCharacter() {
+        val savedId = prefs.getString(PREF_LAST_CHARACTER_ID, null) ?: return
+        val index = characters.indexOfFirst { it.id == savedId }
+        if (index >= 0) currentCharacterIndex = index
+    }
+
+    private fun rememberCurrentCharacter() {
+        prefs.edit().putString(PREF_LAST_CHARACTER_ID, currentCharacter.id).apply()
     }
 
     private fun loadCurrentChat() {
         chatMessages.clear(); chatMessages.addAll(storage.load(currentCharacter.id))
         if (chatMessages.isEmpty()) chatMessages.add(ChatMessage(currentCharacter.name, currentCharacter.greeting))
+        rememberCurrentCharacter()
         renderChat(); updateCharacterHeader()
     }
 
@@ -279,9 +328,9 @@ class MainActivity : Activity() {
         characterChip.text = "${currentCharacter.name} • ${currentCharacter.personality.take(24)}"
         modelStatus.text = when {
             replyInProgress -> "KI antwortet..."
-            modelFileManager.modelExists() -> "GGUF Safe • ${modelFileManager.modelStatusMessage().removePrefix("Lokales Modell gefunden: ")}"
             engineModelFileManager.engineModelExists() -> "MediaPipe • ${engineModelFileManager.engineModelFile().length() / 1024 / 1024} MB"
-            else -> "Demo-Modus • kein GGUF importiert"
+            modelFileManager.modelExists() -> "GGUF Safe • ${modelFileManager.modelFile().length() / 1024 / 1024} MB"
+            else -> "Demo-Modus • stabil"
         }
     }
 

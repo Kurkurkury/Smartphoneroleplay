@@ -18,8 +18,8 @@ class AiEngineController(context: Context) {
         } else {
             "Kein GGUF-Modell importiert"
         }
-        val nativeText = if (nativeBridge.isAvailable && nativeBridge.isNativeChatGenerationEnabled) {
-            "llama.cpp Runtime: AKTIV"
+        val nativeText = if (nativeBridge.isAvailable) {
+            "llama.cpp Runtime: Library geladen, direkter Chat im Hauptprozess gesperrt"
         } else {
             "llama.cpp Runtime: NICHT AKTIV - ${nativeBridge.status()}"
         }
@@ -28,27 +28,28 @@ class AiEngineController(context: Context) {
         } else {
             "MediaPipe Runtime: wartet auf .task/.litertlm Engine-Modell"
         }
-        return "KI-Engine: GGUF bevorzugt\n$ggufText\n$nativeText\n${engineModelFileManager.engineModelStatusMessage()}\n$mediaPipeText"
+        return "KI-Engine: stabiler Safe-Modus\n$ggufText\n$nativeText\n${engineModelFileManager.engineModelStatusMessage()}\n$mediaPipeText"
     }
 
-    fun canUseNativeChat(): Boolean = fileManager.modelExists() && nativeBridge.isAvailable && nativeBridge.isNativeChatGenerationEnabled
+    fun canUseNativeChat(): Boolean = false
 
     fun diagnosticText(): String = buildString {
         appendLine("KI-Engine Diagnose")
-        appendLine("Aktiver Chat-Modus: ${if (canUseNativeChat()) "GGUF llama.cpp" else if (engineModelFileManager.engineModelExists()) "MediaPipe Runtime" else "Demo-Fallback"}")
+        appendLine("Aktiver Chat-Modus: ${if (engineModelFileManager.engineModelExists()) "MediaPipe Runtime" else "Demo/GGUF Safe Mode"}")
         appendLine("GGUF llama.cpp: ${if (nativeBridge.isAvailable) "Library geladen" else "Library nicht geladen"}")
-        appendLine("GGUF Chat: ${if (nativeBridge.isNativeChatGenerationEnabled) "AKTIV" else "DEAKTIVIERT"}")
+        appendLine("GGUF Chat im Hauptprozess: GESPERRT nach Realgeraet-Crash")
         appendLine("")
         appendLine(statusText())
         appendLine("")
         appendLine("Modellprioritaet:")
-        appendLine("1. GGUF Import = bevorzugter lokaler Chatpfad ueber llama.cpp")
-        appendLine("2. Engine-Modell Import = MediaPipe .task/.litertlm Fallbackpfad")
-        appendLine("3. Demo-Modus = Fallback ohne Modell")
+        appendLine("1. MediaPipe Engine-Modell, wenn .task/.litertlm importiert ist")
+        appendLine("2. Demo/GGUF Safe Mode, wenn nur GGUF importiert ist")
+        appendLine("3. Demo-Modus ohne Modell")
         appendLine("")
         appendLine("Android-Engine-Pfade:")
         appendLine("1. llama.cpp native")
         appendLine("   Status: ${nativeBridge.status()}")
+        appendLine("   Sicherheit: direkte Load/Decode-Tests laufen nicht mehr im Hauptprozess")
         plannedEngines.forEachIndexed { index, engine ->
             appendLine("${index + 2}. ${engine.displayName}")
             appendLine("   Status: ${engine.status()}")

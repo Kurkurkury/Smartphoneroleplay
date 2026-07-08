@@ -11,8 +11,12 @@ class EngineModelFileManager(private val context: Context) {
         private val SUPPORTED_EXTENSIONS = setOf("task", "litertlm")
     }
 
+    fun engineModelDirectory(): File {
+        return File(context.filesDir, ENGINE_MODEL_DIR).apply { if (!exists()) mkdirs() }
+    }
+
     fun engineModelFile(): File {
-        val dir = File(context.filesDir, ENGINE_MODEL_DIR)
+        val dir = engineModelDirectory()
         val existing = dir.listFiles()
             ?.filter { it.isFile && extensionOf(it.name) in SUPPORTED_EXTENSIONS && it.length() > 0 }
             ?.maxByOrNull { it.lastModified() }
@@ -40,8 +44,7 @@ class EngineModelFileManager(private val context: Context) {
             }
             val extension = compatibility.extension
 
-            val target = File(context.filesDir, "$ENGINE_MODEL_DIR/engine_model.$extension")
-            target.parentFile?.mkdirs()
+            val target = File(engineModelDirectory(), "engine_model.$extension")
             context.contentResolver.openInputStream(uri).use { input ->
                 if (input == null) return ModelImportResult(false, "Engine-Modellimport fehlgeschlagen: Datei konnte nicht geoeffnet werden.")
                 target.outputStream().use { output -> input.copyTo(output) }
@@ -49,6 +52,18 @@ class EngineModelFileManager(private val context: Context) {
             ModelImportResult(true, "Engine-Modell importiert: ${target.name} (${target.length() / 1024 / 1024} MB)\n${compatibility.engineName}: ${compatibility.message}")
         } catch (error: Throwable) {
             ModelImportResult(false, "Engine-Modellimport fehlgeschlagen: ${error.message ?: error.javaClass.simpleName}")
+        }
+    }
+
+    fun clearEngineModel(): ModelImportResult {
+        val dir = engineModelDirectory()
+        val files = dir.listFiles()?.filter { it.isFile } ?: emptyList()
+        if (files.isEmpty()) return ModelImportResult(true, "Kein Engine-Modell vorhanden.")
+        val failed = files.filterNot { it.delete() }
+        return if (failed.isEmpty()) {
+            ModelImportResult(true, "Engine-Modell geloescht. Die App nutzt wieder GGUF Safe Mode oder Demo-Modus.")
+        } else {
+            ModelImportResult(false, "Engine-Modell konnte nicht vollstaendig geloescht werden. App neu starten und erneut versuchen.")
         }
     }
 

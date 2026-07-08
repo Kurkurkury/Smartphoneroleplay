@@ -3,9 +3,9 @@ plugins {
     id 'org.jetbrains.kotlin.android'
 }
 
-// Native llama.cpp is now the preferred GGUF path. It remains configurable so CI
-// or low-resource developer machines can still disable it with
-// -PenableNativeLlama=false, but normal debug APKs include the native runtime.
+// Native llama.cpp remains bundled, but direct model load/decode is gated from
+// the main app process after a real-device native crash. The stable product path
+// is MediaPipe when a compatible engine model exists, otherwise Demo/GGUF Safe Mode.
 def enableNativeLlama = providers.gradleProperty('enableNativeLlama')
         .map { !it.toString().equalsIgnoreCase('false') }
         .orElse(true)
@@ -20,8 +20,8 @@ android {
         applicationId 'com.kurkurkury.smartphoneroleplay'
         minSdk 23
         targetSdk 35
-        versionCode 6
-        versionName '0.6.0'
+        versionCode 7
+        versionName '0.7.0'
         manifestPlaceholders = [
             launcherAction: 'android.intent.action.MAIN',
             launcherCategory: 'android.intent.category.LAUNCHER'
