@@ -3,12 +3,12 @@ plugins {
     id 'org.jetbrains.kotlin.android'
 }
 
-// Native llama.cpp support is intentionally opt-in. The app must remain buildable
-// and usable as a local roleplay prototype even when the native runtime is not
-// available on a developer machine, CI runner, emulator, or target phone.
+// Native llama.cpp is now the preferred GGUF path. It remains configurable so CI
+// or low-resource developer machines can still disable it with
+// -PenableNativeLlama=false, but normal debug APKs include the native runtime.
 def enableNativeLlama = providers.gradleProperty('enableNativeLlama')
-        .map { it.toString().equalsIgnoreCase('true') }
-        .orElse(false)
+        .map { !it.toString().equalsIgnoreCase('false') }
+        .orElse(true)
         .get()
 
 android {
@@ -20,8 +20,8 @@ android {
         applicationId 'com.kurkurkury.smartphoneroleplay'
         minSdk 23
         targetSdk 35
-        versionCode 5
-        versionName '0.5.0'
+        versionCode 6
+        versionName '0.6.0'
         manifestPlaceholders = [
             launcherAction: 'android.intent.action.MAIN',
             launcherCategory: 'android.intent.category.LAUNCHER'

@@ -6,13 +6,11 @@ class AiEngineController(context: Context) {
     private val appContext = context.applicationContext
     private val fileManager = OnDeviceModelFileManager(appContext)
     private val engineModelFileManager = EngineModelFileManager(appContext)
-    private val mode: AiEngineMode = AiEngineMode.safeDefault
+    private val nativeBridge = NativeLlamaBridge()
     private val plannedEngines: List<AndroidLocalLlmEngine> = listOf(
         MediaPipePlannedEngine(appContext),
         MlcPlannedEngine()
     )
-
-    fun currentMode(): AiEngineMode = mode
 
     fun statusText(): String {
         val ggufText = if (fileManager.modelExists()) {
@@ -20,34 +18,40 @@ class AiEngineController(context: Context) {
         } else {
             "Kein GGUF-Modell importiert"
         }
-        val runtimeText = if (engineModelFileManager.engineModelExists()) {
+        val nativeText = if (nativeBridge.isAvailable && nativeBridge.isNativeChatGenerationEnabled) {
+            "llama.cpp Runtime: AKTIV"
+        } else {
+            "llama.cpp Runtime: NICHT AKTIV - ${nativeBridge.status()}"
+        }
+        val mediaPipeText = if (engineModelFileManager.engineModelExists()) {
             "MediaPipe Runtime: BEREIT FUER TEST"
         } else {
             "MediaPipe Runtime: wartet auf .task/.litertlm Engine-Modell"
         }
-        return "KI-Engine: MediaPipe Runtime\n$ggufText\n${engineModelFileManager.engineModelStatusMessage()}\n$runtimeText\n${mode.description}"
+        return "KI-Engine: GGUF bevorzugt\n$ggufText\n$nativeText\n${engineModelFileManager.engineModelStatusMessage()}\n$mediaPipeText"
     }
 
-    fun canUseNativeChat(): Boolean = engineModelFileManager.engineModelExists()
+    fun canUseNativeChat(): Boolean = fileManager.modelExists() && nativeBridge.isAvailable && nativeBridge.isNativeChatGenerationEnabled
 
     fun diagnosticText(): String = buildString {
         appendLine("KI-Engine Diagnose")
-        appendLine("Aktiver Chat-Modus: ${if (canUseNativeChat()) "MediaPipe Runtime" else "Demo-Fallback"}")
-        appendLine("llama.cpp Decode: DEAKTIVIERT")
-        appendLine("Grund: direkter llama.cpp Decode crasht auf dem Testgeraet nativ.")
+        appendLine("Aktiver Chat-Modus: ${if (canUseNativeChat()) "GGUF llama.cpp" else if (engineModelFileManager.engineModelExists()) "MediaPipe Runtime" else "Demo-Fallback"}")
+        appendLine("GGUF llama.cpp: ${if (nativeBridge.isAvailable) "Library geladen" else "Library nicht geladen"}")
+        appendLine("GGUF Chat: ${if (nativeBridge.isNativeChatGenerationEnabled) "AKTIV" else "DEAKTIVIERT"}")
         appendLine("")
         appendLine(statusText())
         appendLine("")
-        appendLine("Modelltrennung:")
-        appendLine("1. GGUF Import = alter llama.cpp Status-/Importtest")
-        appendLine("2. Engine-Modell Import = MediaPipe .task/.litertlm Modellpaket")
+        appendLine("Modellprioritaet:")
+        appendLine("1. GGUF Import = bevorzugter lokaler Chatpfad ueber llama.cpp")
+        appendLine("2. Engine-Modell Import = MediaPipe .task/.litertlm Fallbackpfad")
+        appendLine("3. Demo-Modus = Fallback ohne Modell")
         appendLine("")
         appendLine("Android-Engine-Pfade:")
+        appendLine("1. llama.cpp native")
+        appendLine("   Status: ${nativeBridge.status()}")
         plannedEngines.forEachIndexed { index, engine ->
-            appendLine("${index + 1}. ${engine.displayName}")
+            appendLine("${index + 2}. ${engine.displayName}")
             appendLine("   Status: ${engine.status()}")
         }
-        appendLine("")
-        appendLine("Wenn ein kompatibles Engine-Modell importiert ist, versucht der normale Chat automatisch MediaPipe und faellt bei Fehler sauber auf Demo zurueck.")
     }
 }
