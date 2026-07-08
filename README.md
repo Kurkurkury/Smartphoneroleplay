@@ -4,7 +4,7 @@ Android/Kotlin-App fuer eine lokale Smartphone-Roleplay-Chat-App.
 
 ## Produktstand
 
-Diese Version ist als stabiler Android-Prototyp fertiggestellt:
+Diese Version ist ein stabiler Android-Prototyp mit vorbereitetem echten lokalen KI-Pfad:
 
 - native Android-App-Struktur ohne externe Serverpflicht
 - Chat-Oberflaeche im Dark-UI-Stil
@@ -14,8 +14,12 @@ Diese Version ist als stabiler Android-Prototyp fertiggestellt:
 - lokale Chat-Speicherung pro Charakter
 - Chat leeren Funktion
 - Erstellung eigener Charaktere
-- optionaler GGUF-Modellimport
-- fail-safe KI-Schicht: Wenn die native KI nicht vorhanden ist, bleibt die App startbar und nutzt den Demo-Modus
+- separater GGUF-Import fuer alten llama.cpp Diagnosepfad
+- separater Engine-Modellimport fuer MediaPipe `.task` / `.litertlm`
+- MediaPipe LLM Runtime als aktiver lokaler Engine-Pfad, wenn ein kompatibles Engine-Modell importiert ist
+- persistente MediaPipe-Session, damit das Modell nicht bei jeder Antwort neu geladen wird
+- Hintergrund-Antwortgenerierung, damit die UI bei echter Inferenz nicht blockiert
+- fail-safe KI-Schicht: Wenn keine echte Engine verfuegbar ist oder die Engine fehlschlaegt, bleibt die App startbar und zeigt klare Status-/Fehlermeldungen
 - GitHub Actions Workflow fuer Debug-APK-Build
 
 ## Eigene Charaktere erstellen
@@ -32,32 +36,47 @@ Beispiel:
 Luna; Vampirjaegerin in einer dunklen Stadt; Ich bin Luna. Bleib nah bei mir.
 ```
 
-## Lokale KI / GGUF-Modell
+## Lokale KI / Engine-Modell
 
-Die App kann eine GGUF-Datei importieren. Der stabile Standard-Build ist bewusst ohne Pflicht-Native-Build konfiguriert, damit App und CI nicht an NDK, CMake oder llama.cpp scheitern.
+Der aktuelle echte lokale KI-Pfad ist MediaPipe. Dafuer muss in der App ueber `Engine-Modell` ein kompatibles `.task` oder `.litertlm` Modellpaket importiert werden.
 
-Standardmodus:
+Wichtig:
+
+- `.task` / `.litertlm` = aktueller Engine-Pfad fuer MediaPipe/LiteRT-LM
+- `.gguf` = alter llama.cpp Import-/Diagnosepfad, nicht der aktive Chat-Engine-Pfad
+- ZIP-Dateien werden nicht direkt akzeptiert; waehle die eigentliche `.task` oder `.litertlm` Datei aus
+- sehr grosse Modelle koennen auf Smartphones wegen RAM/Geraetegrenzen fehlschlagen
+
+Wenn ein Engine-Modell vorhanden ist, versucht der normale Chat automatisch den MediaPipe-Pfad. Wenn keine Engine vorhanden ist, nutzt die App den stabilen Demo-Modus und markiert die Antwort entsprechend.
+
+## Build
+
+Stabiler Standard-Build ohne Native-llama.cpp-Pflicht:
 
 ```bash
 gradle :app:assembleDebug
 ```
 
-Optionaler Native-Modus:
+Optionaler alter Native-llama.cpp Diagnose-Build:
 
 ```bash
 gradle :app:assembleDebug -PenableNativeLlama=true
 ```
 
-Im Native-Modus wird `app/src/main/cpp/CMakeLists.txt` verwendet und llama.cpp via CMake FetchContent eingebunden. Der Native-Modus ist experimentell und primaer fuer echte Android-Geraete mit `arm64-v8a` gedacht.
+Im Native-Modus wird `app/src/main/cpp/CMakeLists.txt` verwendet und llama.cpp via CMake FetchContent eingebunden. Der direkte llama.cpp Decode-Pfad ist aber bewusst nicht der aktive Chat-Pfad, weil er auf dem Testgeraet native Crashes verursacht hat.
 
-## Build-Hinweis
+## Bedienung
 
-Repository in Android Studio oeffnen, Gradle synchronisieren und `app` auf einem Android-Geraet oder Emulator starten. Ohne Native-Flag startet die App im stabilen lokalen Demo-Modus.
+1. App in Android Studio oeffnen oder Debug-APK bauen.
+2. App auf Smartphone oder Emulator starten.
+3. Optional ueber `Engine-Modell` ein `.task` oder `.litertlm` Modell importieren.
+4. Mit `KI-Test` pruefen, ob die Engine geladen werden kann.
+5. Im Chat normal schreiben.
 
 ## Aktuelle naechste Ausbaustufen
 
-1. Native llama.cpp auf konkretem Android-Geraet testen
-2. Modell-Empfehlung und Import-Anleitung fuer kleine GGUF-Modelle ergaenzen
+1. Ein konkretes kleines `.task` / `.litertlm` Modell fuer Zielgeraete festlegen und dokumentieren
+2. MediaPipe-Parameter fuer Geschwindigkeit, Speicher und Antwortqualitaet feinjustieren
 3. Memory/Langzeitgedaechtnis verbessern
 4. Szenario-Auswahl und Charakterprofile visuell ausbauen
 5. Optional: Bildgenerierung passend zur Handlung ueber externen Dienst oder lokale Bridge
