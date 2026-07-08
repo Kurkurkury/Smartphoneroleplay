@@ -20,12 +20,17 @@ class OnDeviceModelFileManager(private val context: Context) {
         return file.exists() && file.length() > 1024L * 1024L
     }
 
+    fun modelSizeBytes(): Long = if (modelFile().exists()) modelFile().length() else 0L
+
+    fun isLargeForPhone(): Boolean = modelSizeBytes() >= 1024L * 1024L * 1024L
+
     fun modelStatusMessage(): String {
         val file = modelFile()
         return if (modelExists()) {
-            "Lokales Modell gefunden: ${formatBytes(file.length())}"
+            val safety = if (isLargeForPhone()) " — gross fuer Smartphone-Safe-Mode" else " — klein genug fuer vorsichtige Tests"
+            "Lokales GGUF-Modell gefunden: ${formatBytes(file.length())}$safety"
         } else {
-            "Kein lokales Modell importiert. Tippe auf Modell und waehle eine GGUF-Datei."
+            "Kein lokales GGUF-Modell importiert. Tippe auf GGUF-Modell und waehle eine .gguf-Datei."
         }
     }
 
@@ -50,10 +55,26 @@ class OnDeviceModelFileManager(private val context: Context) {
                 target.delete()
                 ModelImportResult(false, "Import fehlgeschlagen: Datei ist zu klein.", bytesCopied)
             } else {
-                ModelImportResult(true, "Modell importiert: ${formatBytes(bytesCopied)}", bytesCopied)
+                val sizeWarning = if (bytesCopied >= 1024L * 1024L * 1024L) {
+                    "\nHinweis: Dieses Modell ist gross fuer Smartphones. Die App bleibt deshalb im GGUF Safe Mode. Fuer echte lokale Inferenz zuerst ein kleineres Modell unter ca. 1 GB testen."
+                } else {
+                    "\nHinweis: Kleine GGUF-Modelle sind fuer den naechsten isolierten Testpfad geeignet."
+                }
+                ModelImportResult(true, "GGUF-Modell importiert: ${formatBytes(bytesCopied)}$sizeWarning", bytesCopied)
             }
         } catch (error: Exception) {
             ModelImportResult(false, "Import fehlgeschlagen: ${error.message ?: "unbekannter Fehler"}")
+        }
+    }
+
+    fun clearModel(): ModelImportResult {
+        val target = modelFile()
+        return if (!target.exists()) {
+            ModelImportResult(true, "Kein GGUF-Modell vorhanden.")
+        } else if (target.delete()) {
+            ModelImportResult(true, "GGUF-Modell geloescht. Die App nutzt wieder MediaPipe oder Demo-Modus.")
+        } else {
+            ModelImportResult(false, "GGUF-Modell konnte nicht geloescht werden. App neu starten und erneut versuchen.")
         }
     }
 
